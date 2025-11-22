@@ -30,39 +30,22 @@
         body {
             font-family: 'Tajawal', sans-serif;
             overflow: hidden;
-            /* اللون الأساسي للجسم (خلفية فاتحة) */
             background-color: #f3f4f6; /* gray-100 */
         }
         
         /* تخصيص التمرير */
-        .custom-scroll::-webkit-scrollbar {
-            height: 6px;
-            width: 6px;
-        }
+        .custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         
-        /* إخفاء شريط التمرير للمعرض ولكن السماح بالتمرير */
-        .hide-scroll::-webkit-scrollbar {
-            display: none;
-        }
-        .hide-scroll {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-        }
+        /* إخفاء شريط التمرير للمعرض */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 
         /* تحسينات الخريطة والواجهة */
-        .leaflet-control-zoom { display: none !important; } /* إخفاء أزرار الزوم الافتراضية لاستبدالها */
-        
-        /* تأثيرات الحركة */
-        .slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
-        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .leaflet-control-zoom { display: none !important; } 
+        .leaflet-routing-container { display: none !important; }
 
-        /* تنسيق نافذة التوجيه */
-        .leaflet-routing-container {
-            display: none !important; /* إخفاء قائمة التوجيه النصية لتوفير المساحة */
-        }
-        
         /* تنسيق نتائج البحث */
         #search-results {
             position: absolute;
@@ -72,7 +55,7 @@
             max-height: 250px;
             overflow-y: auto;
             background-color: #ffffff; 
-            border: 1px solid #e5e7eb; /* border-gray-200 */
+            border: 1px solid #e5e7eb;
             border-radius: 0 0 12px 12px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
             z-index: 50;
@@ -87,6 +70,23 @@
             max-height: 85vh;
             max-width: 90vw;
             object-fit: contain;
+        }
+
+        /* تعيين الارتفاع الافتراضي للوضع المصغر للموبايل */
+        #sidebar.mobile-minimized {
+            height: 40vh; 
+        }
+
+        /* تعيين الارتفاع للوضع المكبر للموبايل */
+        #sidebar.mobile-maximized {
+            height: 75vh;
+        }
+
+        /* يجب أن يكون ارتفاع الشريط الجانبي في وضع الحاسوب ثابتًا */
+        @media (min-width: 768px) {
+            #sidebar {
+                height: 100% !important; /* تجاوز أي تعديلات للجافاسكريبت */
+            }
         }
         
     </style>
@@ -110,19 +110,21 @@
 
     <!-- الشريط الجانبي / القائمة السفلية للموبايل -->
     <aside id="sidebar" class="
-        fixed bottom-0 left-0 right-0 h-[40vh] 
+        fixed bottom-0 left-0 right-0 
         md:relative md:h-full md:w-[400px] lg:w-[450px] md:flex-shrink-0
         bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-xl z-[1000] 
         flex flex-col transition-all duration-500 ease-in-out rounded-t-3xl md:rounded-none
+        mobile-minimized /* الحالة الافتراضية للموبايل */
     ">
         
-        <!-- مقبض السحب للموبايل -->
-        <div class="md:hidden w-full flex justify-center pt-3 pb-1 cursor-pointer" onclick="toggleMobileSidebar()">
-            <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
-        </div>
+        <!-- رأس القائمة والبحث (منطقة السحب/المقبض) -->
+        <div id="sidebar-header" class="px-6 pb-4 md:pt-6 md:border-b border-gray-100 bg-white relative transition-colors duration-300 cursor-grab md:cursor-default rounded-t-3xl">
+            
+            <!-- مقبض السحب للموبايل -->
+            <div class="md:hidden w-full flex justify-center pt-3 pb-1">
+                <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+            </div>
 
-        <!-- رأس القائمة والبحث -->
-        <div class="px-6 pb-4 md:pt-6 md:border-b border-gray-100 bg-white relative transition-colors duration-300">
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h1 class="text-2xl font-extrabold text-blue-900">دليل جدة</h1>
@@ -171,7 +173,8 @@
             <!-- تفاصيل الموقع (مخفي افتراضياً) -->
             <div id="details-content" class="hidden">
                 <!-- الصورة الرئيسية -->
-                <div class="relative w-full h-56 md:h-64 rounded-2xl overflow-hidden shadow-lg mb-5 group cursor-zoom-in" onclick="openLightbox(document.getElementById('location-image').src)">
+                <!-- تم تصغير ارتفاع الصورة على الموبايل لزيادة وضوح النص -->
+                <div class="relative w-full h-48 md:h-64 rounded-2xl overflow-hidden shadow-lg mb-5 group cursor-zoom-in" onclick="openLightbox(document.getElementById('location-image').src)">
                     <img id="location-image" src="" alt="صورة الموقع" 
                          class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
                     <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
@@ -196,7 +199,7 @@
                 <div class="mb-6">
                     <h3 class="font-bold text-gray-800 text-sm mb-3 flex items-center justify-between">
                         <span class="flex items-center"><i class="fas fa-images text-blue-500 ml-2"></i> استوديو الصور</span>
-                        <span class="text-xs text-gray-400 font-normal">(اضغط للعرض)</span>
+                        <span class="text-xs text-gray-400 font-normal">(اضغط للتكبير)</span>
                     </h3>
                     <div id="gallery-container" class="flex overflow-x-auto gap-3 pb-2 hide-scroll snap-x">
                         <!-- الصور تضاف هنا ديناميكياً -->
@@ -226,7 +229,7 @@
 
     <!-- الخريطة -->
     <main class="flex-grow h-full relative bg-gray-200 z-0">
-        <div id="map" class="w-full h-full pb-[40vh] md:pb-0 transition-all duration-500"></div>
+        <div id="map" class="w-full h-full pb-0 md:pb-0 transition-all duration-500"></div>
         
         <!-- أزرار عائمة -->
         <div class="absolute top-5 left-5 z-[500] flex flex-col gap-3">
@@ -258,103 +261,17 @@
     <script>
         // --- 1. البيانات (روابط Unsplash مجانية 100%) ---
         const locations = [
-            {
-                id: 1,
-                title: "واجهة جدة البحرية",
-                lat: 21.6256,
-                lng: 39.1028,
-                image: "https://images.unsplash.com/photo-1586133045726-1c0368331268?q=80&w=1200&auto=format&fit=crop",
-                gallery: [
-                    "https://images.unsplash.com/photo-1597923896356-9c43793614d7?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1596796987114-1e03c1d9b33a?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1548018564-0e6b6286d60c?q=80&w=800&auto=format&fit=crop"
-                ],
-                desc: "أطول واجهة بحرية في المملكة، تجمع بين الفن والرياضة والترفيه. مكان مثالي للعائلات ومحبي المشي.",
-                activities: ["ممشى الدراجات", "مجسمات فنية", "مطاعم عالمية"],
-                zoom: 15,
-                icon: 'water',
-                category: 'ترفيه'
-            },
-            {
-                id: 2,
-                title: "جزيرة بياضة",
-                lat: 21.7833,
-                lng: 39.0167,
-                image: "https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?q=80&w=1200&auto=format&fit=crop",
-                gallery: [
-                    "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1582967788606-a171f1080ca8?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?q=80&w=800&auto=format&fit=crop"
-                ],
-                desc: "مالديف جدة، وجهة الأحلام للسباحة في المياه الفيروزية الصافية والاستمتاع بالشمس.",
-                activities: ["سباحة", "رحلات يخوت", "سنوركلينج"],
-                zoom: 13,
-                icon: 'umbrella-beach',
-                category: 'طبيعة'
-            },
-            {
-                id: 3,
-                title: "جدة التاريخية (البلد)",
-                lat: 21.4901,
-                lng: 39.1862,
-                image: "https://images.unsplash.com/photo-1579703403217-0773d2a71d64?q=80&w=1200&auto=format&fit=crop",
-                gallery: [
-                    "https://images.unsplash.com/photo-1561315488-413494b47780?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1642615325713-673443893337?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1605808278612-f62c2c219689?q=80&w=800&auto=format&fit=crop"
-                ],
-                desc: "قلب جدة النابض بالتاريخ، حيث البيوت الحجازية القديمة والرواشين التي تحكي قصص الأجداد.",
-                activities: ["مهرجانات", "أسواق شعبية", "متاحف"],
-                zoom: 16,
-                icon: 'archway',
-                category: 'تراث'
-            },
-            {
-                id: 4,
-                title: "نافورة الملك فهد",
-                lat: 21.5128,
-                lng: 39.1522,
-                image: "https://images.unsplash.com/photo-1573062322303-34676161476c?q=80&w=1200&auto=format&fit=crop",
-                gallery: [
-                    "https://images.unsplash.com/photo-1548275382-3d9c980817d1?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1570993117964-779d98457d70?q=80&w=800&auto=format&fit=crop"
-                ],
-                desc: "أطول نافورة في العالم، معلم لا يمكن تفويته خاصة في المساء مع الإضاءة الساحرة.",
-                activities: ["تصوير", "مشي ليلي", "مطاعم مطلة"],
-                zoom: 14,
-                icon: 'water', 
-                category: 'معلم'
-            },
-            {
-                id: 5,
-                title: "مسجد الرحمة",
-                lat: 21.6444,
-                lng: 39.1084,
-                image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=1200&auto=format&fit=crop",
-                gallery: [
-                    "https://images.unsplash.com/photo-1552245052-8c71f72c7567?q=80&w=800&auto=format&fit=crop",
-                    "https://images.unsplash.com/photo-1594848201604-3346bdc56238?q=80&w=800&auto=format&fit=crop"
-                ],
-                desc: "المسجد العائم، أيقونة معمارية تجمع بين الروحانية وجمال البحر الأحمر.",
-                activities: ["صلاة", "تأمل", "عمارة إسلامية"],
-                zoom: 16,
-                icon: 'mosque',
-                category: 'ديني'
-            }
+            { id: 1, title: "واجهة جدة البحرية", lat: 21.6256, lng: 39.1028, image: "https://images.unsplash.com/photo-1586133045726-1c0368331268?q=80&w=1200&auto=format&fit=crop", gallery: ["https://images.unsplash.com/photo-1597923896356-9c43793614d7?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1596796987114-1e03c1d9b33a?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1548018564-0e6b6286d60c?q=80&w=800&auto=format&fit=crop"], desc: "أطول واجهة بحرية في المملكة، تجمع بين الفن والرياضة والترفيه. مكان مثالي للعائلات ومحبي المشي.", activities: ["ممشى الدراجات", "مجسمات فنية", "مطاعم عالمية"], zoom: 15, icon: 'water', category: 'ترفيه' },
+            { id: 2, title: "جزيرة بياضة", lat: 21.7833, lng: 39.0167, image: "https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?q=80&w=1200&auto=format&fit=crop", gallery: ["https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1582967788606-a171f1080ca8?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?q=80&w=800&auto=format&fit=crop"], desc: "مالديف جدة، وجهة الأحلام للسباحة في المياه الفيروزية الصافية والاستمتاع بالشمس.", activities: ["سباحة", "رحلات يخوت", "سنوركلينج"], zoom: 13, icon: 'umbrella-beach', category: 'طبيعة' },
+            { id: 3, title: "جدة التاريخية (البلد)", lat: 21.4901, lng: 39.1862, image: "https://images.unsplash.com/photo-1579703403217-0773d2a71d64?q=80&w=1200&auto=format&fit=crop", gallery: ["https://images.unsplash.com/photo-1561315488-413494b47780?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1642615325713-673443893337?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1605808278612-f62c2c219689?q=80&w=800&auto=format&fit=crop"], desc: "قلب جدة النابض بالتاريخ، حيث البيوت الحجازية القديمة والرواشين التي تحكي قصص الأجداد.", activities: ["مهرجانات", "أسواق شعبية", "متاحف"], zoom: 16, icon: 'archway', category: 'تراث' },
+            { id: 4, title: "نافورة الملك فهد", lat: 21.5128, lng: 39.1522, image: "https://images.unsplash.com/photo-1573062322303-34676161476c?q=80&w=1200&auto=format&fit=crop", gallery: ["https://images.unsplash.com/photo-1548275382-3d9c980817d1?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1570993117964-779d98457d70?q=80&w=800&auto=format&fit=crop"], desc: "أطول نافورة في العالم، معلم لا يمكن تفويته خاصة في المساء مع الإضاءة الساحرة.", activities: ["تصوير", "مشي ليلي", "مطاعم مطلة"], zoom: 14, icon: 'water', category: 'معلم' },
+            { id: 5, title: "مسجد الرحمة", lat: 21.6444, lng: 39.1084, image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=1200&auto=format&fit=crop", gallery: ["https://images.unsplash.com/photo-1552245052-8c71f72c7567?q=80&w=800&auto=format&fit=crop", "https://images.unsplash.com/photo-1594848201604-3346bdc56238?q=80&w=800&auto=format&fit=crop"], desc: "المسجد العائم، أيقونة معمارية تجمع بين الروحانية وجمال البحر الأحمر.", activities: ["صلاة", "تأمل", "عمارة إسلامية"], zoom: 16, icon: 'mosque', category: 'ديني' }
         ];
         
         // تعريف طبقات الخرائط المتاحة
         const tileLayers = {
-            standard: {
-                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                name: 'قياسي (CartoDB Voyager)',
-                attribution: '&copy; OSM &copy; CARTO'
-            },
-            satellite: {
-                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                name: 'صور الأقمار الصناعية (Satellite)',
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            }
+            standard: { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', name: 'قياسي (CartoDB Voyager)', attribution: '&copy; OSM &copy; CARTO' },
+            satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', name: 'صور الأقمار الصناعية (Satellite)', attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community' }
         };
 
         let map = null; 
@@ -362,9 +279,20 @@
         let routingControl = null;
         let markers = null;
         let userMarker = null;
-        let currentTileLayer = null; // متغير لتخزين طبقة الخريطة الحالية
+        let currentTileLayer = null;
 
-        // --- 2. تهيئة الخريطة ---
+        // --- متغيرات وظيفة السحب الديناميكية ---
+        let isDragging = false;
+        let startY = 0;
+        const mobileBreakpoint = 768;
+        const MIN_HEIGHT_VH = 40; // 40vh
+        const MAX_HEIGHT_VH = 75; // 75vh
+
+        // --- 2. وظائف تهيئة ومساعدة ---
+
+        // للتحقق من وضع الموبايل
+        const isMobile = () => window.innerWidth < mobileBreakpoint;
+
         function initMap() {
             if (typeof L === 'undefined') {
                 console.error("Leaflet library not loaded yet.");
@@ -376,44 +304,18 @@
                 tap: false 
             }).setView([21.5433, 39.1728], 11);
 
-            // إضافة الطبقة الافتراضية
             switchMapLayer('standard'); 
-
-            // إنشاء L.LayerGroup
             markers = new L.LayerGroup(); 
-
             addLocationMarkers(locations);
             map.addLayer(markers);
-
-            document.addEventListener('click', (e) => {
-                const results = document.getElementById('search-results');
-                const input = document.getElementById('search-input');
-                const dropdown = document.getElementById('map-styles-dropdown');
-                
-                // إغلاق نتائج البحث
-                if (!results.contains(e.target) && e.target !== input) {
-                    results.classList.add('hidden');
-                }
-                
-                // إغلاق قائمة أنماط الخريطة
-                const mapStyleButton = document.querySelector('[title="طبقات الخريطة"]');
-                if (!dropdown.contains(e.target) && e.target !== mapStyleButton) {
-                    dropdown.classList.add('hidden');
-                }
-            });
             
-            // تهيئة واجهة المستخدم لتبديل الأنماط
-            const styleOptions = document.querySelectorAll('.map-style-option');
-            styleOptions.forEach(li => {
-                // تعديل التنسيق لنمط فاتح موحد
-                li.classList.add('p-2', 'rounded-lg', 'text-sm', 'text-gray-700', 'hover:bg-blue-50', 'cursor-pointer', 'transition');
-            });
+            // تهيئة واجهة المستخدم الديناميكية
+            setupDynamicUI();
         }
-
+        
         // --- 3. إدارة العلامات والأيقونات ---
         function addLocationMarkers(locs) {
             if (!markers) return; 
-            
             markers.clearLayers();
             locs.forEach(loc => {
                 let color = 'blue';
@@ -436,7 +338,126 @@
             });
         }
 
-        // --- 4. اختيار الموقع وعرض التفاصيل ---
+        // --- 4. إدارة الشريط الجانبي (Mobile/Desktop) ---
+        const sidebar = document.getElementById('sidebar');
+        const closeBtn = document.getElementById('close-details-btn');
+
+        function isSidebarMaximized() {
+            return isMobile() && sidebar.classList.contains('mobile-maximized');
+        }
+
+        function maximizeMobileSidebar() {
+            if (isMobile()) { 
+                sidebar.classList.remove('mobile-minimized');
+                sidebar.classList.add('mobile-maximized');
+                closeBtn.classList.remove('hidden');
+                // إزالة أي ارتفاع تم تعيينه بواسطة السحب
+                sidebar.style.height = ''; 
+            }
+        }
+
+        function minimizeMobileSidebar() {
+            if (isMobile()) {
+                sidebar.classList.remove('mobile-maximized');
+                sidebar.classList.add('mobile-minimized');
+                closeBtn.classList.add('hidden');
+                // إزالة أي ارتفاع تم تعيينه بواسطة السحب
+                sidebar.style.height = ''; 
+                
+                // إغلاق نتائج البحث إذا كانت مفتوحة
+                document.getElementById('search-results').classList.add('hidden');
+            }
+        }
+
+        function setupDynamicUI() {
+            const sidebarHeader = document.getElementById('sidebar-header');
+            
+            // 4.1. Touch/Drag Listeners for Mobile Panel
+            if (sidebarHeader) {
+                sidebarHeader.addEventListener('touchstart', handleTouchStart);
+                sidebarHeader.addEventListener('touchmove', handleTouchMove);
+                sidebarHeader.addEventListener('touchend', handleTouchEnd);
+            }
+
+            // 4.2. Global Click Listener for minimizing/hiding search results
+            document.addEventListener('click', handleGlobalClick);
+            
+            // تهيئة واجهة المستخدم لتبديل الأنماط
+            document.querySelectorAll('.map-style-option').forEach(li => {
+                li.classList.add('p-2', 'rounded-lg', 'text-sm', 'text-gray-700', 'hover:bg-blue-50', 'cursor-pointer', 'transition');
+            });
+        }
+        
+        // 4.3. Touch/Drag Handlers
+        function handleTouchStart(e) {
+            if (!isMobile()) return;
+            isDragging = true;
+            startY = e.touches[0].clientY;
+            sidebar.style.transition = 'none'; // Disable CSS transition while dragging
+            e.stopPropagation(); // منع التفاعل مع الخريطة أسفل المقبض
+        }
+
+        function handleTouchMove(e) {
+            if (!isDragging || !isMobile()) return;
+
+            const mapHeight = map._container.offsetHeight;
+            const maxHeight = mapHeight * (MAX_HEIGHT_VH / 100);
+            const minHeight = mapHeight * (MIN_HEIGHT_VH / 100);
+            
+            const deltaY = e.touches[0].clientY - startY;
+            const currentHeight = sidebar.offsetHeight;
+            
+            // نحسب الارتفاع الجديد، مع الأخذ في الاعتبار أن السحب للأسفل يزيد قيمة Y
+            let newHeight = currentHeight - deltaY;
+            
+            // تحديد الارتفاع بين الحد الأدنى والأقصى
+            newHeight = Math.min(Math.max(newHeight, minHeight), maxHeight);
+
+            // تطبيق الارتفاع المباشر على العنصر
+            sidebar.style.height = `${newHeight}px`;
+
+            // تحديث نقطة البداية للحركة التالية
+            startY = e.touches[0].clientY;
+            e.preventDefault(); // منع التمرير الافتراضي للصفحة أثناء السحب
+        }
+
+        function handleTouchEnd() {
+            if (!isDragging || !isMobile()) return;
+            isDragging = false;
+            sidebar.style.transition = 'all 0.5s ease-in-out'; // استعادة حركة CSS
+
+            const mapHeight = map._container.offsetHeight;
+            const currentHeight = sidebar.offsetHeight;
+            
+            // العتبة تكون في منتصف المسافة بين الوضعين
+            const threshold = mapHeight * ((MIN_HEIGHT_VH + (MAX_HEIGHT_VH - MIN_HEIGHT_VH) / 2) / 100); 
+
+            if (currentHeight > threshold) {
+                // التقاط إلى الوضع المكبر
+                maximizeMobileSidebar();
+            } else {
+                // التقاط إلى الوضع المصغر
+                minimizeMobileSidebar();
+            }
+        }
+        
+        // 4.4. Click Outside Handler
+        function handleGlobalClick(e) {
+            const mapStylesDropdown = document.getElementById('map-styles-dropdown');
+            const mapStyleButton = document.querySelector('[title="طبقات الخريطة"]');
+            
+            // إغلاق قائمة أنماط الخريطة
+            if (!mapStylesDropdown.contains(e.target) && e.target !== mapStyleButton) {
+                mapStylesDropdown.classList.add('hidden');
+            }
+
+            // تصغير اللوحة الجانبية عند النقر على الخريطة في وضع الموبايل
+            if (isMobile() && isSidebarMaximized() && !sidebar.contains(e.target)) {
+                minimizeMobileSidebar();
+            }
+        }
+
+        // --- 5. اختيار الموقع وعرض التفاصيل ---
         function selectLocation(loc) {
             if (!map) return;
             
@@ -445,19 +466,16 @@
             document.getElementById('default-state').classList.add('hidden');
             const details = document.getElementById('details-content');
             details.classList.remove('hidden');
-            details.classList.add('slide-up');
 
             document.getElementById('location-title').innerText = loc.title;
             document.getElementById('location-desc').innerText = loc.desc;
             document.getElementById('location-category').innerText = loc.category;
-            
-            const mainImageElement = document.getElementById('location-image');
-            mainImageElement.src = loc.image;
+            document.getElementById('location-image').src = loc.image;
             
             const actList = document.getElementById('location-activities');
             actList.innerHTML = '';
             loc.activities.forEach(act => {
-                actList.innerHTML += `<li class="flex items-center text-gray-700 text-sm"><span class="w-2 h-2 bg-blue-400 rounded-full ml-2"></span>${act}</li>`;
+                actList.innerHTML += `<li class="flex items-center text-gray-700 text-sm"><span class="w-2 h-2 bg-blue-400 rounded-full ml-2 flex-shrink-0"></span>${act}</li>`;
             });
 
             const gallery = document.getElementById('gallery-container');
@@ -468,18 +486,16 @@
                 const imgDiv = document.createElement('div');
                 imgDiv.className = "relative flex-shrink-0 w-24 h-20 md:w-32 md:h-24 rounded-lg overflow-hidden cursor-pointer border-2 border-transparent hover:border-blue-500 transition group";
                 
-                imgDiv.onclick = function() {
-                    const mainImg = document.getElementById('location-image');
-                    mainImg.style.opacity = '0.5';
-                    setTimeout(() => {
-                        mainImg.src = imgSrc;
-                        mainImg.style.opacity = '1';
-                    }, 150);
+                // التعديل هنا: عند الضغط على الصورة في الاستوديو، سيتم فتح Lightbox فقط.
+                imgDiv.onclick = function(event) {
+                    event.stopPropagation(); // منع النقر من الوصول إلى العناصر الخلفية
+                    openLightbox(imgSrc);
                 };
                 
                 imgDiv.innerHTML = `
                     <img src="${imgSrc}" 
                          onerror="this.onerror=null; this.src='https://placehold.co/40x40/cccccc/333333?text=${loc.category[0]}'" 
+                         alt="${loc.title}"
                          class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
                 `;
@@ -490,7 +506,7 @@
             map.flyTo([loc.lat, loc.lng], loc.zoom, { paddingBottomRight: [0, 100], animate: true, duration: 1 });
         }
 
-        // --- وظائف Lightbox (التكبير) ---
+        // --- 6. وظائف Lightbox (التكبير) ---
         function openLightbox(src) {
             const lightbox = document.getElementById('lightbox');
             const img = document.getElementById('lightbox-img');
@@ -523,49 +539,12 @@
             if(loc) selectLocation(loc);
         }
 
-        // --- 5. إدارة واجهة الموبايل ---
-        const sidebar = document.getElementById('sidebar');
-        const closeBtn = document.getElementById('close-details-btn');
-
-        function maximizeMobileSidebar() {
-            if (window.innerWidth < 768) { 
-                sidebar.classList.remove('h-[40vh]');
-                sidebar.classList.add('h-[75vh]');
-                closeBtn.classList.remove('hidden');
-            }
-        }
-
-        function minimizeMobileSidebar() {
-            if (window.innerWidth < 768) {
-                sidebar.classList.remove('h-[75vh]');
-                sidebar.classList.add('h-[40vh]');
-            }
-        }
-
-        function toggleMobileSidebar() {
-            if (sidebar.classList.contains('h-[75vh]')) {
-                minimizeMobileSidebar();
-            } else {
-                maximizeMobileSidebar();
-            }
-        }
-
-        function resetUI() {
-            minimizeMobileSidebar();
-            document.getElementById('details-content').classList.add('hidden');
-            document.getElementById('default-state').classList.remove('hidden');
-            closeBtn.classList.add('hidden');
-            document.getElementById('search-input').value = '';
-            document.getElementById('search-results').classList.add('hidden');
-            if (routingControl) map.removeControl(routingControl);
-        }
-
-        // --- 6. المسارات ---
+        // --- 7. المسارات والخرائط والأدوات العامة ---
         function getDirectionsToLocation() {
             if (!activeLocation || !map) return;
             
             if (routingControl) map.removeControl(routingControl);
-            minimizeMobileSidebar();
+            minimizeMobileSidebar(); // تقليص الواجهة لعرض الخريطة
 
             const startRoute = (lat, lng) => {
                 routingControl = L.Routing.control({
@@ -609,39 +588,34 @@
             }
         }
         
-        // --- 7. وظائف تبديل طبقات الخريطة ---
         function switchMapLayer(key) {
             if (!map) return;
-
             const layerData = tileLayers[key];
             if (!layerData) return;
-
-            // إزالة الطبقة القديمة إن وجدت
             if (currentTileLayer) {
                 map.removeLayer(currentTileLayer);
             }
 
-            // إضافة الطبقة الجديدة
             currentTileLayer = L.tileLayer(layerData.url, {
                 attribution: layerData.attribution,
                 maxZoom: 20
             }).addTo(map);
 
-            // إغلاق القائمة المنسدلة
             document.getElementById('map-styles-dropdown').classList.add('hidden');
         }
 
         function toggleMapStylesDropdown() {
-            const dropdown = document.getElementById('map-styles-dropdown');
-            dropdown.classList.toggle('hidden');
+            document.getElementById('map-styles-dropdown').classList.toggle('hidden');
         }
 
-        // --- 8. البحث ---
         function filterLocations() {
             const query = document.getElementById('search-input').value.toLowerCase();
             const resultsDiv = document.getElementById('search-results');
             resultsDiv.innerHTML = '';
             
+            // في وضع البحث، نكبر الواجهة تلقائيًا لتظهر النتائج بوضوح
+            maximizeMobileSidebar(); 
+
             if (query.length < 2) {
                 resultsDiv.classList.add('hidden');
                 return;
@@ -653,7 +627,6 @@
                 resultsDiv.classList.remove('hidden');
                 filtered.forEach(l => {
                     const div = document.createElement('div');
-                    // تعديل التنسيق لنمط فاتح موحد
                     div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 flex items-center gap-3";
                     
                     div.innerHTML = `
@@ -677,13 +650,22 @@
             }
         }
 
-        // --- 9. أدوات عامة ---
         function resetMap() {
             if (!map) return;
             map.flyTo([21.5433, 39.1728], 11);
             resetUI();
             activeLocation = null;
         }
+        
+        function resetUI() {
+            minimizeMobileSidebar();
+            document.getElementById('details-content').classList.add('hidden');
+            document.getElementById('default-state').classList.remove('hidden');
+            document.getElementById('search-input').value = '';
+            document.getElementById('search-results').classList.add('hidden');
+            if (routingControl) map.removeControl(routingControl);
+        }
+
 
         function zoomToLocation() {
             if(!map || !activeLocation) return;
