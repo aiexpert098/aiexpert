@@ -30,6 +30,8 @@
         body {
             font-family: 'Tajawal', sans-serif;
             overflow: hidden;
+            /* اللون الأساسي للجسم (خلفية فاتحة) */
+            background-color: #f3f4f6; /* gray-100 */
         }
         
         /* تخصيص التمرير */
@@ -69,8 +71,8 @@
             left: 0;
             max-height: 250px;
             overflow-y: auto;
-            background-color: white;
-            border: 1px solid #e2e8f0;
+            background-color: #ffffff; 
+            border: 1px solid #e5e7eb; /* border-gray-200 */
             border-radius: 0 0 12px 12px;
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
             z-index: 50;
@@ -86,14 +88,15 @@
             max-width: 90vw;
             object-fit: contain;
         }
+        
     </style>
 </head>
-<body class="bg-gray-100 h-screen w-full flex flex-col md:flex-row overflow-hidden">
+<body class="bg-gray-100 h-screen w-full flex flex-col md:flex-row overflow-hidden transition-colors duration-300">
 
     <!-- Lightbox Modal (نافذة تكبير الصور) -->
     <div id="lightbox" class="fixed inset-0 z-[9999] bg-black/95 hidden flex items-center justify-center opacity-0 transition-all duration-300" onclick="closeLightbox()">
         <div class="relative w-full h-full flex items-center justify-center p-4">
-            <img id="lightbox-img" src="" class="rounded-lg shadow-2xl transform scale-95 transition-transform duration-300" alt="تكبير الصورة" onclick="event.stopPropagation()"> <!-- stopPropagation لمنع الإغلاق عند الضغط على الصورة نفسها -->
+            <img id="lightbox-img" src="" class="rounded-lg shadow-2xl transform scale-95 transition-transform duration-300" alt="تكبير الصورة" onclick="event.stopPropagation()">
             
             <button class="absolute top-6 right-6 text-white/80 hover:text-white transition focus:outline-none bg-white/10 hover:bg-white/20 rounded-full w-12 h-12 flex items-center justify-center backdrop-blur-sm border border-white/10" onclick="closeLightbox()">
                 <i class="fas fa-times text-xl"></i>
@@ -106,10 +109,6 @@
     </div>
 
     <!-- الشريط الجانبي / القائمة السفلية للموبايل -->
-    <!-- 
-       Mobile: fixed bottom-0 h-[40vh] -> expands to h-[75vh] when active
-       Desktop: relative w-1/3 h-full
-    -->
     <aside id="sidebar" class="
         fixed bottom-0 left-0 right-0 h-[40vh] 
         md:relative md:h-full md:w-[400px] lg:w-[450px] md:flex-shrink-0
@@ -123,21 +122,24 @@
         </div>
 
         <!-- رأس القائمة والبحث -->
-        <div class="px-6 pb-4 md:pt-6 md:border-b border-gray-100 bg-white relative">
+        <div class="px-6 pb-4 md:pt-6 md:border-b border-gray-100 bg-white relative transition-colors duration-300">
             <div class="flex justify-between items-center mb-4">
                 <div>
                     <h1 class="text-2xl font-extrabold text-blue-900">دليل جدة</h1>
                     <p class="text-gray-500 text-xs md:text-sm">استكشف كنوز العروس</p>
                 </div>
-                <!-- زر إغلاق التفاصيل في الموبايل (يظهر فقط عند فتح التفاصيل) -->
-                <button id="close-details-btn" onclick="minimizeMobileSidebar()" class="md:hidden hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200">
-                    <i class="fas fa-chevron-down"></i>
-                </button>
+
+                <div class="flex items-center space-x-2 space-x-reverse">
+                    <!-- زر إغلاق التفاصيل في الموبايل -->
+                    <button id="close-details-btn" onclick="minimizeMobileSidebar()" class="md:hidden hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
             </div>
 
             <div class="relative">
                 <input type="text" id="search-input" placeholder="ابحث عن مكان..." 
-                    class="w-full p-3 pl-10 pr-4 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-right text-sm shadow-sm" 
+                    class="w-full p-3 pl-10 pr-4 rounded-xl bg-gray-50 border border-gray-200 text-gray-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-right text-sm shadow-sm" 
                     onkeyup="filterLocations()" onfocus="maximizeMobileSidebar()">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                     <i class="fas fa-search text-gray-400"></i>
@@ -147,12 +149,12 @@
         </div>
 
         <!-- منطقة المحتوى القابلة للتمرير -->
-        <div id="content-area" class="flex-grow overflow-y-auto custom-scroll p-6 relative bg-white">
+        <div id="content-area" class="flex-grow overflow-y-auto custom-scroll p-6 relative bg-white transition-colors duration-300">
             
             <!-- الحالة الافتراضية -->
             <div id="default-state" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
                 <div class="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center animate-pulse">
-                    <i class="fas fa-map-marked-alt text-4xl text-blue-300"></i>
+                    <i class="fas fa-map-marked-alt text-4xl text-blue-500"></i>
                 </div>
                 <div>
                     <p class="text-lg font-bold text-gray-600">أهلاً بك في جدة</p>
@@ -161,8 +163,8 @@
                 
                 <!-- اقتراحات سريعة -->
                 <div class="flex gap-2 mt-4 overflow-x-auto w-full justify-center px-2">
-                    <button onclick="quickSelect(1)" class="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-full hover:border-blue-500 hover:text-blue-600 transition">الواجهة البحرية</button>
-                    <button onclick="quickSelect(3)" class="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-full hover:border-blue-500 hover:text-blue-600 transition">البلد</button>
+                    <button onclick="quickSelect(1)" class="text-xs bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-full hover:border-blue-500 hover:text-blue-600 transition">الواجهة البحرية</button>
+                    <button onclick="quickSelect(3)" class="text-xs bg-white text-gray-700 border border-gray-200 px-3 py-1.5 rounded-full hover:border-blue-500 hover:text-blue-600 transition">البلد</button>
                 </div>
             </div>
 
@@ -204,13 +206,13 @@
                 <!-- الأنشطة -->
                 <div class="bg-blue-50 rounded-xl p-5 border border-blue-100 mb-6">
                     <h3 class="font-bold text-blue-900 text-sm mb-3">أبرز الأنشطة:</h3>
-                    <ul id="location-activities" class="space-y-2">
+                    <ul id="location-activities" class="space-y-2 text-gray-700">
                         <!-- الأنشطة تضاف هنا -->
                     </ul>
                 </div>
 
                 <!-- أزرار التحكم -->
-                <div class="grid grid-cols-2 gap-3 sticky bottom-0 bg-white pt-2 pb-1">
+                <div class="grid grid-cols-2 gap-3 sticky bottom-0 bg-white pt-2 pb-1 transition-colors duration-300">
                     <button onclick="zoomToLocation()" class="col-span-1 bg-gray-100 text-gray-700 py-3.5 rounded-xl hover:bg-gray-200 transition font-bold text-sm flex items-center justify-center gap-2">
                         <i class="fas fa-search-plus"></i> تقريب
                     </button>
@@ -228,6 +230,22 @@
         
         <!-- أزرار عائمة -->
         <div class="absolute top-5 left-5 z-[500] flex flex-col gap-3">
+            <!-- زر تبديل أنماط الخريطة -->
+            <div class="relative">
+                <button onclick="toggleMapStylesDropdown()" class="bg-white text-gray-700 w-10 h-10 rounded-full shadow-lg flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition" title="طبقات الخريطة">
+                    <i class="fas fa-layer-group"></i>
+                </button>
+                
+                <!-- قائمة منسدلة لأنماط الخريطة -->
+                <div id="map-styles-dropdown" class="hidden absolute left-12 top-0 w-52 bg-white rounded-xl shadow-xl p-2 border border-gray-200 transition-all duration-200 origin-top-left">
+                    <p class="text-xs text-gray-500 px-3 pt-1 pb-2 border-b font-medium">طبقات الخريطة الأساسية</p>
+                    <ul class="space-y-1 mt-1 text-right">
+                        <li onclick="switchMapLayer('standard')" class="map-style-option">قياسي (CartoDB Voyager)</li>
+                        <li onclick="switchMapLayer('satellite')" class="map-style-option">صور الأقمار الصناعية (Satellite)</li>
+                    </ul>
+                </div>
+            </div>
+
             <button onclick="resetMap()" class="bg-white text-gray-700 w-10 h-10 rounded-full shadow-lg flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition" title="إعادة تعيين">
                 <i class="fas fa-undo"></i>
             </button>
@@ -245,7 +263,6 @@
                 title: "واجهة جدة البحرية",
                 lat: 21.6256,
                 lng: 39.1028,
-                // صورة رئيسية عامة لجدة/الكورنيش
                 image: "https://images.unsplash.com/photo-1586133045726-1c0368331268?q=80&w=1200&auto=format&fit=crop",
                 gallery: [
                     "https://images.unsplash.com/photo-1597923896356-9c43793614d7?q=80&w=800&auto=format&fit=crop",
@@ -263,12 +280,11 @@
                 title: "جزيرة بياضة",
                 lat: 21.7833,
                 lng: 39.0167,
-                // صور تعبر عن البحر الأحمر والشعب المرجانية
                 image: "https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?q=80&w=1200&auto=format&fit=crop",
                 gallery: [
-                    "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=800&auto=format&fit=crop", // بحر
-                    "https://images.unsplash.com/photo-1582967788606-a171f1080ca8?q=80&w=800&auto=format&fit=crop", // غوص
-                    "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?q=80&w=800&auto=format&fit=crop" // شعاب
+                    "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=800&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1582967788606-a171f1080ca8?q=80&w=800&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?q=80&w=800&auto=format&fit=crop"
                 ],
                 desc: "مالديف جدة، وجهة الأحلام للسباحة في المياه الفيروزية الصافية والاستمتاع بالشمس.",
                 activities: ["سباحة", "رحلات يخوت", "سنوركلينج"],
@@ -281,7 +297,6 @@
                 title: "جدة التاريخية (البلد)",
                 lat: 21.4901,
                 lng: 39.1862,
-                // صور المباني التاريخية
                 image: "https://images.unsplash.com/photo-1579703403217-0773d2a71d64?q=80&w=1200&auto=format&fit=crop",
                 gallery: [
                     "https://images.unsplash.com/photo-1561315488-413494b47780?q=80&w=800&auto=format&fit=crop",
@@ -299,7 +314,6 @@
                 title: "نافورة الملك فهد",
                 lat: 21.5128,
                 lng: 39.1522,
-                // صور النافورة
                 image: "https://images.unsplash.com/photo-1573062322303-34676161476c?q=80&w=1200&auto=format&fit=crop",
                 gallery: [
                     "https://images.unsplash.com/photo-1548275382-3d9c980817d1?q=80&w=800&auto=format&fit=crop",
@@ -316,7 +330,6 @@
                 title: "مسجد الرحمة",
                 lat: 21.6444,
                 lng: 39.1084,
-                // صور المسجد العائم
                 image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=1200&auto=format&fit=crop",
                 gallery: [
                     "https://images.unsplash.com/photo-1552245052-8c71f72c7567?q=80&w=800&auto=format&fit=crop",
@@ -329,16 +342,30 @@
                 category: 'ديني'
             }
         ];
+        
+        // تعريف طبقات الخرائط المتاحة
+        const tileLayers = {
+            standard: {
+                url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                name: 'قياسي (CartoDB Voyager)',
+                attribution: '&copy; OSM &copy; CARTO'
+            },
+            satellite: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                name: 'صور الأقمار الصناعية (Satellite)',
+                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            }
+        };
 
         let map = null; 
         let activeLocation = null;
         let routingControl = null;
         let markers = null;
         let userMarker = null;
+        let currentTileLayer = null; // متغير لتخزين طبقة الخريطة الحالية
 
         // --- 2. تهيئة الخريطة ---
         function initMap() {
-            // التحقق من وجود الكائن L (Leaflet) قبل الاستخدام
             if (typeof L === 'undefined') {
                 console.error("Leaflet library not loaded yet.");
                 return;
@@ -349,10 +376,8 @@
                 tap: false 
             }).setView([21.5433, 39.1728], 11);
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OSM &copy; CARTO',
-                maxZoom: 20
-            }).addTo(map);
+            // إضافة الطبقة الافتراضية
+            switchMapLayer('standard'); 
 
             // إنشاء L.LayerGroup
             markers = new L.LayerGroup(); 
@@ -363,9 +388,25 @@
             document.addEventListener('click', (e) => {
                 const results = document.getElementById('search-results');
                 const input = document.getElementById('search-input');
+                const dropdown = document.getElementById('map-styles-dropdown');
+                
+                // إغلاق نتائج البحث
                 if (!results.contains(e.target) && e.target !== input) {
                     results.classList.add('hidden');
                 }
+                
+                // إغلاق قائمة أنماط الخريطة
+                const mapStyleButton = document.querySelector('[title="طبقات الخريطة"]');
+                if (!dropdown.contains(e.target) && e.target !== mapStyleButton) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+            
+            // تهيئة واجهة المستخدم لتبديل الأنماط
+            const styleOptions = document.querySelectorAll('.map-style-option');
+            styleOptions.forEach(li => {
+                // تعديل التنسيق لنمط فاتح موحد
+                li.classList.add('p-2', 'rounded-lg', 'text-sm', 'text-gray-700', 'hover:bg-blue-50', 'cursor-pointer', 'transition');
             });
         }
 
@@ -397,7 +438,7 @@
 
         // --- 4. اختيار الموقع وعرض التفاصيل ---
         function selectLocation(loc) {
-            if (!map) return; // التحقق من جاهزية الخريطة
+            if (!map) return;
             
             activeLocation = loc;
             
@@ -410,31 +451,24 @@
             document.getElementById('location-desc').innerText = loc.desc;
             document.getElementById('location-category').innerText = loc.category;
             
-            // تحديث الصورة الرئيسية
             const mainImageElement = document.getElementById('location-image');
             mainImageElement.src = loc.image;
             
-            // الأنشطة
             const actList = document.getElementById('location-activities');
             actList.innerHTML = '';
             loc.activities.forEach(act => {
                 actList.innerHTML += `<li class="flex items-center text-gray-700 text-sm"><span class="w-2 h-2 bg-blue-400 rounded-full ml-2"></span>${act}</li>`;
             });
 
-            // استوديو الصور (Carousel)
             const gallery = document.getElementById('gallery-container');
             gallery.innerHTML = ''; 
             
-            // إضافة جميع الصور للمعرض
             const allImages = [loc.image, ...loc.gallery];
             allImages.forEach((imgSrc) => {
                 const imgDiv = document.createElement('div');
-                // جعل الصور مربعة قليلاً أو ذات نسبة ثابتة
                 imgDiv.className = "relative flex-shrink-0 w-24 h-20 md:w-32 md:h-24 rounded-lg overflow-hidden cursor-pointer border-2 border-transparent hover:border-blue-500 transition group";
                 
-                // عند الضغط: نقوم بتحديث الصورة الرئيسية فقط
                 imgDiv.onclick = function() {
-                    // إضافة تأثير تحميل بسيط
                     const mainImg = document.getElementById('location-image');
                     mainImg.style.opacity = '0.5';
                     setTimeout(() => {
@@ -443,9 +477,9 @@
                     }, 150);
                 };
                 
-                // تم إزالة معالجة الخطأ من هنا أيضاً
                 imgDiv.innerHTML = `
                     <img src="${imgSrc}" 
+                         onerror="this.onerror=null; this.src='https://placehold.co/40x40/cccccc/333333?text=${loc.category[0]}'" 
                          class="w-full h-full object-cover">
                     <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
                 `;
@@ -522,11 +556,13 @@
             document.getElementById('default-state').classList.remove('hidden');
             closeBtn.classList.add('hidden');
             document.getElementById('search-input').value = '';
+            document.getElementById('search-results').classList.add('hidden');
+            if (routingControl) map.removeControl(routingControl);
         }
 
         // --- 6. المسارات ---
         function getDirectionsToLocation() {
-            if (!activeLocation || !map) return; // التحقق من جاهزية الخريطة
+            if (!activeLocation || !map) return;
             
             if (routingControl) map.removeControl(routingControl);
             minimizeMobileSidebar();
@@ -556,7 +592,6 @@
                 routingControl.on('routesfound', function(e) {
                     const routes = e.routes;
                     const summary = routes[0].summary;
-                    // استخدام واجهة بديلة لـ alert
                     console.log(`تم تحديد المسار: ${Math.round(summary.totalDistance / 1000)} كم، حوالي ${Math.round(summary.totalTime / 60)} دقيقة.`);
                 });
             };
@@ -573,8 +608,35 @@
                 startRoute(21.4858, 39.1925);
             }
         }
+        
+        // --- 7. وظائف تبديل طبقات الخريطة ---
+        function switchMapLayer(key) {
+            if (!map) return;
 
-        // --- 7. البحث ---
+            const layerData = tileLayers[key];
+            if (!layerData) return;
+
+            // إزالة الطبقة القديمة إن وجدت
+            if (currentTileLayer) {
+                map.removeLayer(currentTileLayer);
+            }
+
+            // إضافة الطبقة الجديدة
+            currentTileLayer = L.tileLayer(layerData.url, {
+                attribution: layerData.attribution,
+                maxZoom: 20
+            }).addTo(map);
+
+            // إغلاق القائمة المنسدلة
+            document.getElementById('map-styles-dropdown').classList.add('hidden');
+        }
+
+        function toggleMapStylesDropdown() {
+            const dropdown = document.getElementById('map-styles-dropdown');
+            dropdown.classList.toggle('hidden');
+        }
+
+        // --- 8. البحث ---
         function filterLocations() {
             const query = document.getElementById('search-input').value.toLowerCase();
             const resultsDiv = document.getElementById('search-results');
@@ -591,11 +653,13 @@
                 resultsDiv.classList.remove('hidden');
                 filtered.forEach(l => {
                     const div = document.createElement('div');
+                    // تعديل التنسيق لنمط فاتح موحد
                     div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 flex items-center gap-3";
                     
-                    // تم إزالة معالجة الخطأ من هنا أيضاً
                     div.innerHTML = `
                         <img src="${l.image}" 
+                             onerror="this.onerror=null; this.src='https://placehold.co/40x40/cccccc/333333?text=${l.category[0]}'" 
+                             alt="${l.title}"
                              class="w-10 h-10 rounded object-cover">
                         <div>
                             <p class="font-bold text-sm text-gray-800">${l.title}</p>
@@ -613,22 +677,21 @@
             }
         }
 
-        // --- 8. أدوات عامة ---
+        // --- 9. أدوات عامة ---
         function resetMap() {
-            if (!map) return; // التحقق من جاهزية الخريطة
+            if (!map) return;
             map.flyTo([21.5433, 39.1728], 11);
-            if (routingControl) map.removeControl(routingControl);
             resetUI();
             activeLocation = null;
         }
 
         function zoomToLocation() {
-            if(!map || !activeLocation) return; // التحقق من جاهزية الخريطة
+            if(!map || !activeLocation) return;
             map.flyTo([activeLocation.lat, activeLocation.lng], 17);
         }
 
         function locateUser() {
-            if (!map) return; // التحقق من جاهزية الخريطة
+            if (!map) return;
             map.locate({setView: true, maxZoom: 16});
             map.once('locationfound', e => {
                 if(userMarker) map.removeLayer(userMarker);
