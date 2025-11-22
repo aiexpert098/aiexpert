@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>خريطة جدة السياحية التفاعلية</title>
+    
+    <!-- تحميل خط تجوال من Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    
+    <!-- تحميل Tailwind CSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- تحميل مكتبة Leaflet للخرائط -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- تحميل مكتبة Leaflet Routing Machine للاتجاهات -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
+    <style>
+        body {
+            font-family: 'Tajawal', sans-serif;
+            overflow: hidden; /* منع التمرير للصفحة كاملة */
+        }
+        
+        /* تخصيص شريط التمرير */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+
+        /* تحسين مظهر الخريطة */
+        #map {
+            z-index: 1;
+        }
+        
+        /* تأثيرات الانتقال */
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* تخصيص نافذة الاتجاهات لتتناسب مع التصميم العربي */
+        .leaflet-routing-container {
+            font-family: 'Tajawal', sans-serif !important;
+            direction: rtl;
+            text-align: right;
+            background-color: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            margin-right: 10px !important;
+        }
+        
+        /* إخفاء حقوق Routing Machine الطويلة للحفاظ على النظافة */
+        .leaflet-routing-container h2 {
+            font-size: 16px;
+            font-weight: bold;
+            color: #1e3a8a;
+        }
+        
+        /* تعديل أزرار المسار */
+        .routing-btn {
+            background-color: #1e3a8a;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen w-full flex flex-col md:flex-row">
+
+    <!-- القسم الجانبي (بطاقة المعلومات) -->
+    <aside class="w-full md:w-1/3 lg:w-1/4 h-[40vh] md:h-full bg-white shadow-2xl z-20 overflow-y-auto flex flex-col relative order-2 md:order-1">
+        
+        <!-- رأس القائمة -->
+        <div class="p-6 border-b border-gray-100 bg-white sticky top-0 z-10">
+            <h1 class="text-2xl font-extrabold text-blue-900 mb-2">وجهات جدة الساحرة</h1>
+            <p class="text-gray-500 text-sm">استكشف جمال البحر الأحمر. اضغط على العلامات في الخريطة لعرض التفاصيل.</p>
+        </div>
+
+        <!-- محتوى البطاقة (يتم تعبئته بالجافاسكريبت) -->
+        <div id="info-card" class="p-6 flex-grow flex flex-col justify-center items-center text-center">
+            
+            <!-- الحالة الافتراضية قبل الضغط -->
+            <div id="default-state" class="text-gray-400 fade-in">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-20 w-20 mx-auto mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <p class="text-lg font-medium">اختر وجهة من الخريطة</p>
+                <p class="text-sm mt-2 text-gray-300">أو انقر بزر الماوس الأيمن على الخريطة لتحديد نقطة</p>
+            </div>
+
+            <!-- محتوى التفاصيل (مخفي افتراضياً) -->
+            <div id="details-content" class="hidden w-full text-right fade-in">
+                <div class="relative w-full h-48 rounded-xl overflow-hidden shadow-md mb-6 group">
+                    <img id="location-image" src="" alt="صورة الموقع" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
+                    <span id="location-tag" class="absolute bottom-3 right-3 bg-blue-600 text-white text-xs px-3 py-1 rounded-full shadow-lg">سياحة</span>
+                </div>
+
+                <h2 id="location-title" class="text-2xl font-bold text-gray-800 mb-3"></h2>
+                
+                <div class="flex items-center text-yellow-500 mb-4">
+                    <span>★★★★★</span>
+                    <span class="text-gray-400 text-xs mr-2">(وجهة مميزة)</span>
+                </div>
+
+                <p id="location-desc" class="text-gray-600 leading-relaxed text-sm mb-6"></p>
+
+                <div class="bg-blue-50 rounded-lg p-4 border border-blue-100 mb-4">
+                    <h3 class="font-bold text-blue-800 text-sm mb-2">أبرز الأنشطة:</h3>
+                    <ul id="location-activities" class="list-disc list-inside text-sm text-gray-700 space-y-1">
+                        <!-- يتم ملؤها برمجياً -->
+                    </ul>
+                </div>
+                
+                <!-- أزرار التحكم -->
+                <div class="flex flex-col gap-3 mt-4">
+                    <button onclick="zoomToLocation()" class="w-full bg-white border border-blue-900 text-blue-900 py-3 rounded-xl hover:bg-blue-50 transition font-medium flex items-center justify-center gap-2">
+                        <span>عرض عن قرب</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                        </svg>
+                    </button>
+                    
+                    <button onclick="getDirectionsToLocation()" class="w-full bg-blue-900 text-white py-3 rounded-xl hover:bg-blue-800 transition shadow-lg flex items-center justify-center gap-2">
+                        <span>اتجاهات إلى هنا</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- تذييل -->
+        <div class="p-4 border-t border-gray-100 text-center">
+            <p class="text-xs text-gray-400">© 2024 دليل جدة السياحي</p>
+        </div>
+    </aside>
+
+    <!-- حاوية الخريطة -->
+    <main class="flex-grow h-[60vh] md:h-full relative order-1 md:order-2">
+        <div id="map" class="w-full h-full"></div>
+        
+        <!-- زر عائم لإعادة الضبط -->
+        <button onclick="resetMap()" class="absolute top-4 left-4 z-[500] bg-white text-gray-700 p-2 rounded-lg shadow-md hover:bg-gray-50 transition" title="إعادة تعيين الخريطة">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+        </button>
+
+        <!-- زر تحديد الموقع الحالي -->
+        <button onclick="locateUser()" class="absolute top-16 left-4 z-[500] bg-white text-gray-700 p-2 rounded-lg shadow-md hover:bg-gray-50 transition" title="موقعي الحالي">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+        </button>
+    </main>
+
+    <script>
+        // --- 1. إعداد البيانات ---
+        const locations = [
+            {
+                id: 1,
+                title: "واجهة جدة البحرية",
+                lat: 21.6256,
+                lng: 39.1028,
+                image: "https://images.unsplash.com/photo-1565551932402-99081e74a9a4?q=80&w=1000&auto=format&fit=crop",
+                desc: "تُعد واجهة جدة البحرية الوجهة السياحية الأولى في المدينة، حيث تمتد على ساحل البحر الأحمر بمساحات خضراء شاسعة وممرات للمشي.",
+                activities: ["المشي وركوب الدراجات", "النوافير الراقصة", "المطاعم والمقاهي", "مشاهدة الغروب"],
+                zoom: 15
+            },
+            {
+                id: 2,
+                title: "جزيرة بياضة",
+                lat: 21.7833,
+                lng: 39.0167,
+                image: "https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?q=80&w=1000&auto=format&fit=crop",
+                desc: "تُلقب بـ 'مالديف جدة'، وهي وجهة بحرية ساحرة تتميز بمياهها الفيروزية الصافية وشعابها المرجانية الملونة.",
+                activities: ["السباحة والسنوركلينج", "رحلات القوارب", "الاستجمام الشمسي"],
+                zoom: 13
+            },
+            {
+                id: 3,
+                title: "جدة التاريخية (البلد)",
+                lat: 21.4901,
+                lng: 39.1862,
+                image: "https://images.unsplash.com/photo-1579703403217-0773d2a71d64?q=80&w=1000&auto=format&fit=crop",
+                desc: "أحد مواقع التراث العالمي لليونسكو، تتميز بمبانيها العريقة المصنوعة من الحجر المنقبي والرواشين الخشبية المزخرفة.",
+                activities: ["جولات تاريخية", "التسوق في الأسواق", "زيارة بيت نصيف"],
+                zoom: 16
+            },
+            {
+                id: 4,
+                title: "نافورة الملك فهد",
+                lat: 21.5128,
+                lng: 39.1522,
+                image: "https://images.unsplash.com/photo-1573062322303-34676161476c?q=80&w=1000&auto=format&fit=crop",
+                desc: "أطول نافورة في العالم، تضخ المياه لارتفاع يصل إلى 312 متراً، ويمكن مشاهدتها من جميع أنحاء المدينة.",
+                activities: ["المشي على الكورنيش", "التصوير الليلي", "إطلالة بانورامية"],
+                zoom: 14
+            },
+            {
+                id: 5,
+                title: "مسجد الرحمة (العائم)",
+                lat: 21.6444,
+                lng: 39.1084,
+                image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=1000&auto=format&fit=crop",
+                desc: "تحفة معمارية إسلامية بنيت على ساحل البحر الأحمر، يبدو وكأنه يطفو على الماء عند المد العالي.",
+                activities: ["الصلاة", "التأمل", "التصوير المعماري"],
+                zoom: 16
+            }
+        ];
+
+        let map;
+        let activeLocation = null;
+        let routingControl = null;
+
+        // --- 2. تهيئة الخريطة ---
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: false
+            }).setView([21.5433, 39.1728], 11);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OpenStreetMap &copy; CARTO',
+                maxZoom: 20
+            }).addTo(map);
+
+            L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+            // إضافة العلامات
+            locations.forEach(loc => {
+                const marker = L.marker([loc.lat, loc.lng]).addTo(map);
+                
+                marker.bindTooltip(loc.title, {
+                    permanent: false,
+                    direction: 'top',
+                    className: 'bg-blue-900 text-white px-2 py-1 rounded shadow-lg border-0'
+                });
+
+                marker.on('click', () => {
+                    updateInfoCard(loc);
+                    map.flyTo([loc.lat, loc.lng], loc.zoom, { animate: true, duration: 1.5 });
+                });
+            });
+        }
+
+        // --- 3. تحديث واجهة المستخدم ---
+        function updateInfoCard(loc) {
+            activeLocation = loc;
+            
+            document.getElementById('default-state').classList.add('hidden');
+            const content = document.getElementById('details-content');
+            content.classList.remove('hidden');
+            
+            content.classList.remove('fade-in');
+            void content.offsetWidth; 
+            content.classList.add('fade-in');
+
+            document.getElementById('location-title').innerText = loc.title;
+            document.getElementById('location-desc').innerText = loc.desc;
+            document.getElementById('location-image').src = loc.image;
+
+            const activitiesList = document.getElementById('location-activities');
+            activitiesList.innerHTML = '';
+            loc.activities.forEach(act => {
+                const li = document.createElement('li');
+                li.innerText = act;
+                activitiesList.appendChild(li);
+            });
+        }
+
+        // --- 4. وظائف التحكم بالاتجاهات ---
+        
+        function getDirectionsToLocation() {
+            if (!activeLocation) return;
+
+            // إزالة المسار السابق إن وجد
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            // محاولة الحصول على موقع المستخدم
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const userLat = position.coords.latitude;
+                    const userLng = position.coords.longitude;
+                    drawRoute(userLat, userLng, activeLocation.lat, activeLocation.lng);
+                    alert("تم تحديد مسار من موقعك الحالي.");
+                }, error => {
+                    // في حال رفض الإذن أو فشل التحديد، نستخدم مركز المدينة
+                    console.log("Geolocation unavailable, using default");
+                    drawRoute(21.4858, 39.1925, activeLocation.lat, activeLocation.lng); // من وسط البلد
+                    alert("تعذر تحديد موقعك بدقة. تم وضع نقطة بداية افتراضية (وسط البلد). يمكنك سحب النقطة لتغييرها.");
+                });
+            } else {
+                drawRoute(21.4858, 39.1925, activeLocation.lat, activeLocation.lng);
+            }
+        }
+
+        function drawRoute(startLat, startLng, endLat, endLng) {
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            routingControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(startLat, startLng),
+                    L.latLng(endLat, endLng)
+                ],
+                routeWhileDragging: true,
+                language: 'ar', // دعم اللغة العربية في التوجيهات
+                showAlternatives: true,
+                lineOptions: {
+                    styles: [{color: '#1e3a8a', opacity: 0.7, weight: 6}]
+                },
+                // تخصيص العلامات (Markers)
+                createMarker: function(i, wp, nWps) {
+                    const isStart = i === 0;
+                    return L.marker(wp.latLng, {
+                        draggable: true,
+                        icon: L.icon({
+                            iconUrl: isStart ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png' : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                            iconSize: [25, 41],
+                            iconAnchor: [12, 41],
+                            popupAnchor: [1, -34],
+                            shadowSize: [41, 41]
+                        })
+                    }).bindPopup(isStart ? "نقطة البداية (اسحبني لتغيير الموقع)" : "الوجهة");
+                }
+            }).addTo(map);
+        }
+
+        function zoomToLocation() {
+            if (activeLocation) {
+                map.flyTo([activeLocation.lat, activeLocation.lng], 16);
+            }
+        }
+
+        function resetMap() {
+            map.flyTo([21.5433, 39.1728], 11);
+            if (routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+            document.getElementById('details-content').classList.add('hidden');
+            document.getElementById('default-state').classList.remove('hidden');
+            activeLocation = null;
+        }
+
+        function locateUser() {
+            map.locate({setView: true, maxZoom: 16});
+            map.once('locationfound', function(e) {
+                L.marker(e.latlng).addTo(map)
+                    .bindPopup("أنت هنا").openPopup();
+            });
+        }
+
+        window.onload = initMap;
+
+    </script>
+</body>
+</html>
