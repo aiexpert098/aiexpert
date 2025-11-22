@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>دليل جدة السياحي التفاعلي</title>
+    
+    <!-- تحميل الخطوط -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    
+    <!-- Font Awesome & Awesome Markers -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/lvoogdt/Leaflet.awesome-markers@2.0.2/dist/leaflet.awesome-markers.css">
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/lvoogdt/Leaflet.awesome-markers@2.0.2/dist/leaflet.awesome-markers.js"></script>
+
+    <style>
+        body {
+            font-family: 'Tajawal', sans-serif;
+            overflow: hidden;
+        }
+        
+        /* تخصيص التمرير */
+        .custom-scroll::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        /* إخفاء شريط التمرير للمعرض ولكن السماح بالتمرير */
+        .hide-scroll::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scroll {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* تحسينات الخريطة والواجهة */
+        .leaflet-control-zoom { display: none !important; } /* إخفاء أزرار الزوم الافتراضية لاستبدالها */
+        
+        /* تأثيرات الحركة */
+        .slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        /* تنسيق نافذة التوجيه */
+        .leaflet-routing-container {
+            display: none !important; /* إخفاء قائمة التوجيه النصية لتوفير المساحة */
+        }
+        
+        /* تنسيق نتائج البحث */
+        #search-results {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            left: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            background-color: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0 0 12px 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            z-index: 50;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen w-full flex flex-col md:flex-row overflow-hidden">
+
+    <!-- الشريط الجانبي / القائمة السفلية للموبايل -->
+    <!-- 
+       Mobile: fixed bottom-0 h-[40vh] -> expands to h-[75vh] when active
+       Desktop: relative w-1/3 h-full
+    -->
+    <aside id="sidebar" class="
+        fixed bottom-0 left-0 right-0 h-[40vh] 
+        md:relative md:h-full md:w-[400px] lg:w-[450px] md:flex-shrink-0
+        bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.1)] md:shadow-xl z-[1000] 
+        flex flex-col transition-all duration-500 ease-in-out rounded-t-3xl md:rounded-none
+    ">
+        
+        <!-- مقبض السحب للموبايل -->
+        <div class="md:hidden w-full flex justify-center pt-3 pb-1 cursor-pointer" onclick="toggleMobileSidebar()">
+            <div class="w-12 h-1.5 bg-gray-300 rounded-full"></div>
+        </div>
+
+        <!-- رأس القائمة والبحث -->
+        <div class="px-6 pb-4 md:pt-6 md:border-b border-gray-100 bg-white relative">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h1 class="text-2xl font-extrabold text-blue-900">دليل جدة</h1>
+                    <p class="text-gray-500 text-xs md:text-sm">استكشف كنوز العروس</p>
+                </div>
+                <!-- زر إغلاق التفاصيل في الموبايل (يظهر فقط عند فتح التفاصيل) -->
+                <button id="close-details-btn" onclick="minimizeMobileSidebar()" class="md:hidden hidden bg-gray-100 p-2 rounded-full text-gray-600 hover:bg-gray-200">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+
+            <div class="relative">
+                <input type="text" id="search-input" placeholder="ابحث عن مكان..." 
+                    class="w-full p-3 pl-10 pr-4 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition text-right text-sm shadow-sm" 
+                    onkeyup="filterLocations()" onfocus="maximizeMobileSidebar()">
+                <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <i class="fas fa-search text-gray-400"></i>
+                </div>
+                <div id="search-results" class="hidden custom-scroll"></div>
+            </div>
+        </div>
+
+        <!-- منطقة المحتوى القابلة للتمرير -->
+        <div id="content-area" class="flex-grow overflow-y-auto custom-scroll p-6 relative bg-white">
+            
+            <!-- الحالة الافتراضية -->
+            <div id="default-state" class="flex flex-col items-center justify-center h-full text-center text-gray-400 space-y-4">
+                <div class="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center animate-pulse">
+                    <i class="fas fa-map-marked-alt text-4xl text-blue-300"></i>
+                </div>
+                <div>
+                    <p class="text-lg font-bold text-gray-600">أهلاً بك في جدة</p>
+                    <p class="text-sm text-gray-400 mt-1 px-8">اختر موقعاً من الخريطة أو استخدم البحث لعرض التفاصيل والصور.</p>
+                </div>
+                
+                <!-- اقتراحات سريعة -->
+                <div class="flex gap-2 mt-4 overflow-x-auto w-full justify-center px-2">
+                    <button onclick="quickSelect(1)" class="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-full hover:border-blue-500 hover:text-blue-600 transition">الواجهة البحرية</button>
+                    <button onclick="quickSelect(3)" class="text-xs bg-white border border-gray-200 px-3 py-1.5 rounded-full hover:border-blue-500 hover:text-blue-600 transition">البلد</button>
+                </div>
+            </div>
+
+            <!-- تفاصيل الموقع (مخفي افتراضياً) -->
+            <div id="details-content" class="hidden">
+                <!-- الصورة الرئيسية -->
+                <div class="relative w-full h-56 md:h-64 rounded-2xl overflow-hidden shadow-lg mb-5 group">
+                    <img id="location-image" src="" alt="صورة الموقع" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+                    <div class="absolute bottom-4 right-4 text-white">
+                        <span id="location-category" class="bg-blue-600/90 backdrop-blur-sm text-[10px] font-bold px-2 py-1 rounded-md uppercase tracking-wider mb-1 inline-block">سياحة</span>
+                        <h2 id="location-title" class="text-2xl font-bold leading-tight"></h2>
+                    </div>
+                </div>
+
+                <!-- الوصف -->
+                <div class="mb-6">
+                    <p id="location-desc" class="text-gray-600 leading-relaxed text-sm md:text-base"></p>
+                </div>
+
+                <!-- استوديو الصور -->
+                <div class="mb-6">
+                    <h3 class="font-bold text-gray-800 text-sm mb-3 flex items-center">
+                        <i class="fas fa-images text-blue-500 ml-2"></i>
+                        استوديو الصور
+                    </h3>
+                    <div id="gallery-container" class="flex overflow-x-auto gap-3 pb-2 hide-scroll snap-x">
+                        <!-- الصور تضاف هنا ديناميكياً -->
+                    </div>
+                </div>
+
+                <!-- الأنشطة -->
+                <div class="bg-blue-50 rounded-xl p-5 border border-blue-100 mb-6">
+                    <h3 class="font-bold text-blue-900 text-sm mb-3">أبرز الأنشطة:</h3>
+                    <ul id="location-activities" class="space-y-2">
+                        <!-- الأنشطة تضاف هنا -->
+                    </ul>
+                </div>
+
+                <!-- أزرار التحكم -->
+                <div class="grid grid-cols-2 gap-3 sticky bottom-0 bg-white pt-2 pb-1">
+                    <button onclick="zoomToLocation()" class="col-span-1 bg-gray-100 text-gray-700 py-3.5 rounded-xl hover:bg-gray-200 transition font-bold text-sm flex items-center justify-center gap-2">
+                        <i class="fas fa-search-plus"></i> تقريب
+                    </button>
+                    <button onclick="getDirectionsToLocation()" class="col-span-1 bg-blue-900 text-white py-3.5 rounded-xl hover:bg-blue-800 transition shadow-lg shadow-blue-900/20 font-bold text-sm flex items-center justify-center gap-2">
+                        <i class="fas fa-location-arrow"></i> الاتجاهات
+                    </button>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- الخريطة -->
+    <main class="flex-grow h-full relative bg-gray-200 z-0">
+        <div id="map" class="w-full h-full pb-[40vh] md:pb-0 transition-all duration-500"></div>
+        
+        <!-- أزرار عائمة -->
+        <div class="absolute top-5 left-5 z-[500] flex flex-col gap-3">
+            <button onclick="resetMap()" class="bg-white text-gray-700 w-10 h-10 rounded-full shadow-lg flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition" title="إعادة تعيين">
+                <i class="fas fa-undo"></i>
+            </button>
+            <button onclick="locateUser()" class="bg-white text-gray-700 w-10 h-10 rounded-full shadow-lg flex items-center justify-center hover:bg-blue-50 hover:text-blue-600 transition" title="موقعي">
+                <i class="fas fa-crosshairs"></i>
+            </button>
+        </div>
+    </main>
+
+    <script>
+        // --- 1. البيانات (مع الصور الإضافية للمعرض) ---
+        const locations = [
+            {
+                id: 1,
+                title: "واجهة جدة البحرية",
+                lat: 21.6256,
+                lng: 39.1028,
+                image: "https://images.unsplash.com/photo-1565551932402-99081e74a9a4?q=80&w=800&auto=format&fit=crop",
+                gallery: [
+                    "https://images.unsplash.com/photo-1548018564-0e6b6286d60c?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1597089623808-51665355861a?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1586133045726-1c0368331268?q=80&w=400&auto=format&fit=crop"
+                ],
+                desc: "أطول واجهة بحرية في المملكة، تجمع بين الفن والرياضة والترفيه. مكان مثالي للعائلات ومحبي المشي.",
+                activities: ["ممشى الدراجات", "مجسمات فنية", "مطاعم عالمية"],
+                zoom: 15,
+                icon: 'water',
+                category: 'ترفيه'
+            },
+            {
+                id: 2,
+                title: "جزيرة بياضة",
+                lat: 21.7833,
+                lng: 39.0167,
+                image: "https://images.unsplash.com/photo-1590523277543-a94d2e4eb00b?q=80&w=800&auto=format&fit=crop",
+                gallery: [
+                    "https://images.unsplash.com/photo-1515447523219-722479539f17?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1544551763-46a013bb70d5?q=80&w=400&auto=format&fit=crop"
+                ],
+                desc: "مالديف جدة، وجهة الأحلام للسباحة في المياه الفيروزية الصافية والاستمتاع بالشمس.",
+                activities: ["سباحة", "رحلات يخوت", "سنوركلينج"],
+                zoom: 13,
+                icon: 'umbrella-beach',
+                category: 'طبيعة'
+            },
+            {
+                id: 3,
+                title: "جدة التاريخية (البلد)",
+                lat: 21.4901,
+                lng: 39.1862,
+                image: "https://images.unsplash.com/photo-1579703403217-0773d2a71d64?q=80&w=800&auto=format&fit=crop",
+                gallery: [
+                    "https://images.unsplash.com/photo-1582134776893-6369c64b7b83?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1597923896356-9c43793614d7?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1561315488-413494b47780?q=80&w=400&auto=format&fit=crop"
+                ],
+                desc: "قلب جدة النابض بالتاريخ، حيث البيوت الحجازية القديمة والرواشين التي تحكي قصص الأجداد.",
+                activities: ["مهرجانات", "أسواق شعبية", "متاحف"],
+                zoom: 16,
+                icon: 'archway',
+                category: 'تراث'
+            },
+            {
+                id: 4,
+                title: "نافورة الملك فهد",
+                lat: 21.5128,
+                lng: 39.1522,
+                image: "https://images.unsplash.com/photo-1573062322303-34676161476c?q=80&w=800&auto=format&fit=crop",
+                gallery: [
+                    "https://images.unsplash.com/photo-1570993117964-779d98457d70?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1548275382-3d9c980817d1?q=80&w=400&auto=format&fit=crop"
+                ],
+                desc: "أطول نافورة في العالم، معلم لا يمكن تفويته خاصة في المساء مع الإضاءة الساحرة.",
+                activities: ["تصوير", "مشي ليلي", "مطاعم مطلة"],
+                zoom: 14,
+                icon: 'water', // Using generic font awesome icon that maps to something suitable
+                category: 'معلم'
+            },
+            {
+                id: 5,
+                title: "مسجد الرحمة",
+                lat: 21.6444,
+                lng: 39.1084,
+                image: "https://images.unsplash.com/photo-1564507592333-c60657eea523?q=80&w=800&auto=format&fit=crop",
+                gallery: [
+                    "https://images.unsplash.com/photo-1552245052-8c71f72c7567?q=80&w=400&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1594848201604-3346bdc56238?q=80&w=400&auto=format&fit=crop"
+                ],
+                desc: "المسجد العائم، أيقونة معمارية تجمع بين الروحانية وجمال البحر الأحمر.",
+                activities: ["صلاة", "تأمل", "عمارة إسلامية"],
+                zoom: 16,
+                icon: 'mosque',
+                category: 'ديني'
+            }
+        ];
+
+        let map;
+        let activeLocation = null;
+        let routingControl = null;
+        const markers = new L.LayerGroup();
+        let userMarker = null;
+
+        // --- 2. تهيئة الخريطة ---
+        function initMap() {
+            map = L.map('map', {
+                zoomControl: false,
+                tap: false // fix for mobile delays sometimes
+            }).setView([21.5433, 39.1728], 11);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; OSM &copy; CARTO',
+                maxZoom: 20
+            }).addTo(map);
+
+            addLocationMarkers(locations);
+            map.addLayer(markers);
+
+            // إخفاء البحث عند النقر خارج
+            document.addEventListener('click', (e) => {
+                const results = document.getElementById('search-results');
+                const input = document.getElementById('search-input');
+                if (!results.contains(e.target) && e.target !== input) {
+                    results.classList.add('hidden');
+                }
+            });
+        }
+
+        // --- 3. إدارة العلامات والأيقونات ---
+        function addLocationMarkers(locs) {
+            markers.clearLayers();
+            locs.forEach(loc => {
+                // تحديد لون بناءً على الفئة (مثال بسيط)
+                let color = 'blue';
+                if (loc.category === 'طبيعة') color = 'green';
+                if (loc.category === 'تراث') color = 'orange';
+                if (loc.category === 'ديني') color = 'purple';
+
+                const icon = L.AwesomeMarkers.icon({
+                    icon: loc.icon || 'star',
+                    markerColor: color,
+                    prefix: 'fa',
+                    iconColor: 'white'
+                });
+
+                const marker = L.marker([loc.lat, loc.lng], {icon: icon})
+                    .bindTooltip(loc.title, {direction: 'top', offset: [0, -20], className: 'font-tajawal font-bold'})
+                    .on('click', () => selectLocation(loc));
+                
+                markers.addLayer(marker);
+            });
+        }
+
+        // --- 4. اختيار الموقع وعرض التفاصيل (Responsive Logic) ---
+        function selectLocation(loc) {
+            activeLocation = loc;
+            
+            // 1. تعبئة البيانات
+            document.getElementById('default-state').classList.add('hidden');
+            const details = document.getElementById('details-content');
+            details.classList.remove('hidden');
+            details.classList.add('slide-up');
+
+            // النصوص
+            document.getElementById('location-title').innerText = loc.title;
+            document.getElementById('location-desc').innerText = loc.desc;
+            document.getElementById('location-category').innerText = loc.category;
+            
+            // الصورة الرئيسية
+            document.getElementById('location-image').src = loc.image;
+
+            // الأنشطة
+            const actList = document.getElementById('location-activities');
+            actList.innerHTML = '';
+            loc.activities.forEach(act => {
+                actList.innerHTML += `<li class="flex items-center text-gray-700 text-sm"><span class="w-2 h-2 bg-blue-400 rounded-full ml-2"></span>${act}</li>`;
+            });
+
+            // استوديو الصور (Carousel)
+            const gallery = document.getElementById('gallery-container');
+            gallery.innerHTML = ''; // Clear
+            // إضافة الصورة الرئيسية كأول صورة في المعرض أيضاً
+            const allImages = [loc.image, ...loc.gallery];
+            allImages.forEach(imgSrc => {
+                const imgDiv = document.createElement('div');
+                imgDiv.className = "flex-shrink-0 w-24 h-24 md:w-32 md:h-24 rounded-lg overflow-hidden cursor-pointer border-2 border-transparent hover:border-blue-500 transition";
+                imgDiv.innerHTML = `<img src="${imgSrc}" class="w-full h-full object-cover" onclick="document.getElementById('location-image').src = this.src">`;
+                gallery.appendChild(imgDiv);
+            });
+
+            // 2. منطق الموبايل (توسيع النافذة)
+            maximizeMobileSidebar();
+
+            // 3. تحريك الخريطة
+            map.flyTo([loc.lat, loc.lng], loc.zoom, { paddingBottomRight: [0, 100], animate: true, duration: 1 });
+        }
+
+        // دالة مساعدة للاختيار السريع
+        function quickSelect(id) {
+            const loc = locations.find(l => l.id === id);
+            if(loc) selectLocation(loc);
+        }
+
+        // --- 5. إدارة واجهة الموبايل ---
+        const sidebar = document.getElementById('sidebar');
+        const closeBtn = document.getElementById('close-details-btn');
+
+        function maximizeMobileSidebar() {
+            if (window.innerWidth < 768) { // فقط للموبايل
+                sidebar.classList.remove('h-[40vh]');
+                sidebar.classList.add('h-[75vh]');
+                closeBtn.classList.remove('hidden');
+            }
+        }
+
+        function minimizeMobileSidebar() {
+            if (window.innerWidth < 768) {
+                sidebar.classList.remove('h-[75vh]');
+                sidebar.classList.add('h-[40vh]');
+                // إذا كان في وضع التفاصيل، نخفي زر الإغلاق ونعود للوضع الطبيعي، لكن نبقي المحتوى ظاهراً
+                // إذا أردنا إغلاق كل شيء:
+                // resetUI(); 
+            }
+        }
+
+        function toggleMobileSidebar() {
+            if (sidebar.classList.contains('h-[75vh]')) {
+                minimizeMobileSidebar();
+            } else {
+                maximizeMobileSidebar();
+            }
+        }
+
+        function resetUI() {
+            minimizeMobileSidebar();
+            document.getElementById('details-content').classList.add('hidden');
+            document.getElementById('default-state').classList.remove('hidden');
+            closeBtn.classList.add('hidden');
+            document.getElementById('search-input').value = '';
+        }
+
+        // --- 6. المسارات (تم الإصلاح) ---
+        function getDirectionsToLocation() {
+            if (!activeLocation) return;
+            
+            if (routingControl) map.removeControl(routingControl);
+
+            // نصغر القائمة في الموبايل لنرى الخريطة والمسار
+            minimizeMobileSidebar();
+
+            const startRoute = (lat, lng) => {
+                routingControl = L.Routing.control({
+                    waypoints: [
+                        L.latLng(lat, lng),
+                        L.latLng(activeLocation.lat, activeLocation.lng)
+                    ],
+                    routeWhileDragging: true,
+                    // fix: حذفنا language: 'ar' لتجنب الخطأ
+                    // language: 'ar', 
+                    showAlternatives: true,
+                    lineOptions: { styles: [{color: '#1e40af', opacity: 0.8, weight: 6}] },
+                    createMarker: function(i, wp) {
+                        return L.marker(wp.latLng, {
+                            draggable: true,
+                            icon: L.AwesomeMarkers.icon({
+                                icon: i === 0 ? 'location-arrow' : 'flag-checkered',
+                                markerColor: i === 0 ? 'green' : 'red',
+                                prefix: 'fa'
+                            })
+                        });
+                    },
+                    // تخصيص الحاوية لعرض المسافة والوقت فقط بدون تفاصيل نصية مزعجة
+                    show: false 
+                }).addTo(map);
+
+                // إضافة ملخص بسيط للمسافة والوقت يدوياً إذا أردنا (اختياري)
+                routingControl.on('routesfound', function(e) {
+                    const routes = e.routes;
+                    const summary = routes[0].summary;
+                    alert(`تم تحديد المسار: ${Math.round(summary.totalDistance / 1000)} كم، حوالي ${Math.round(summary.totalTime / 60)} دقيقة.`);
+                });
+            };
+
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    pos => startRoute(pos.coords.latitude, pos.coords.longitude),
+                    () => {
+                        alert("تعذر تحديد موقعك، سنبدأ من وسط البلد");
+                        startRoute(21.4858, 39.1925);
+                    }
+                );
+            } else {
+                startRoute(21.4858, 39.1925);
+            }
+        }
+
+        // --- 7. البحث ---
+        function filterLocations() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '';
+            
+            if (query.length < 2) {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+
+            const filtered = locations.filter(l => l.title.includes(query) || l.desc.includes(query));
+            
+            if (filtered.length > 0) {
+                resultsDiv.classList.remove('hidden');
+                filtered.forEach(l => {
+                    const div = document.createElement('div');
+                    div.className = "p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 flex items-center gap-3";
+                    div.innerHTML = `
+                        <img src="${l.image}" class="w-10 h-10 rounded object-cover">
+                        <div>
+                            <p class="font-bold text-sm text-gray-800">${l.title}</p>
+                            <p class="text-xs text-gray-500">${l.category}</p>
+                        </div>
+                    `;
+                    div.onclick = () => {
+                        selectLocation(l);
+                        resultsDiv.classList.add('hidden');
+                    };
+                    resultsDiv.appendChild(div);
+                });
+            } else {
+                resultsDiv.classList.add('hidden');
+            }
+        }
+
+        // --- 8. أدوات عامة ---
+        function resetMap() {
+            map.flyTo([21.5433, 39.1728], 11);
+            if (routingControl) map.removeControl(routingControl);
+            resetUI();
+            activeLocation = null;
+        }
+
+        function zoomToLocation() {
+            if(activeLocation) map.flyTo([activeLocation.lat, activeLocation.lng], 17);
+        }
+
+        function locateUser() {
+            map.locate({setView: true, maxZoom: 16});
+            map.once('locationfound', e => {
+                if(userMarker) map.removeLayer(userMarker);
+                userMarker = L.marker(e.latlng, {
+                    icon: L.AwesomeMarkers.icon({icon: 'user', markerColor: 'cadetblue', prefix: 'fa'})
+                }).addTo(map).bindPopup("أنت هنا").openPopup();
+            });
+        }
+
+        window.onload = initMap;
+    </script>
+</body>
+</html>
