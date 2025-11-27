@@ -3,373 +3,115 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini AR Blueprint</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r165/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
-            }
-        }
-    </script>
+    <title>Procedural AR Cube</title>
+    
+    <!-- 1. Load Model Viewer (Handles AR Logic) -->
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.3.0/model-viewer.min.js"></script>
+
+    <!-- 2. Load Three.js & GLTFExporter (Handles 3D Model Generation) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
+
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #f0f0f0; }
-        #info {
-            position: absolute; top: 0; left: 0; width: 100%; padding: 10px; text-align: center;
-            background: rgba(0, 0, 0, 0.5); color: white; z-index: 1000;
+        body { margin: 0; background-color: #f0f0f0; font-family: sans-serif; overflow: hidden; }
+        
+        model-viewer {
+            width: 100vw;
+            height: 100vh;
+            --poster-color: #ffffff;
         }
-        #ar-button {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
+
+        /* Loading Overlay */
+        #loader {
+            position: absolute; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%);
+            font-size: 1.2rem; color: #555; pointer-events: none;
+        }
+        
+        /* AR Button Style */
+        .ar-button {
+            background-color: white; border-radius: 20px; border: none;
+            position: absolute; bottom: 30px; left: 50%;
             transform: translateX(-50%);
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: bold;
-            color: white;
-            background: #008aff;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 138, 255, 0.5);
-            transition: background 0.3s, transform 0.1s;
-        }
-        #ar-button:hover {
-            background: #006edd;
-        }
-        #ar-button:active {
-            transform: translateX(-50%) scale(0.98);
+            padding: 10px 25px; font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
     </style>
 </head>
 <body>
-    <div id="info">
-        WebAR Status: Not Initialized. Use the "Start AR" button on a mobile device.
-    </div>
-    
-    <script type="module">
-        import * as THREE from 'three';
-        import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+    <!-- Loading Text -->
+    <div id="loader">Generating 3D Model...</div>
+
+    <!-- 
+      AR Component 
+      Note: The 'src' attribute is empty initially. 
+      JavaScript will inject the 3D Cube blob here.
+    -->
+    <model-viewer 
+        id="ar-viewer"
+        src=""
+        ar 
+        ar-modes="webxr scene-viewer quick-look" 
+        camera-controls 
+        touch-action="pan-y"
+        shadow-intensity="1"
+        shadow-softness="0.8"
+        environment-image="neutral"
+        auto-rotate>
         
-        // --- Core Setup Variables ---
-        let camera, scene, renderer;
-        let controller;
-        let reticle, targetObject;
-        let hitTestSource = null;
-        let hitTestSourceRequested = false;
-        
-        // --- Interaction State ---
-        let isDragging = false;
-        let previousTouch = [];
-        let objectRotationY = 0;
-        let objectScale = 0.5;
-        
-        // --- Animation Constants ---
-        const PULSE_SPEED = 0.005;
-        const ROTATE_SPEED = 0.002;
+        <button slot="ar-button" class="ar-button">
+            👋 View in AR
+        </button>
+    </model-viewer>
 
-        /**
-         * Initializes the Three.js scene, camera, and renderer.
-         */
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-            
-            // 1. Setup Renderer with AR compatibility
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.outputColorSpace = THREE.SRGBColorSpace;
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.shadowMap.enabled = true; // Crucial for dynamic shadows
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
+    <script>
+        // --- 3D MODEL GENERATION SCRIPT ---
+        // This code creates the Cube inside the HTML so you don't need external files.
 
-            // 2. Add Lighting for light estimation and shadows
-            const ambientLight = new THREE.AmbientLight(0xffffff, 2);
-            scene.add(ambientLight);
+        function generateCubeAndRunAR() {
+            // 1. Setup a virtual Three.js scene
+            const scene = new THREE.Scene();
 
-            // Directional light for shadows (conceptual placement based on environment understanding)
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
-            directionalLight.position.set(0.5, 5, 3); // Position relative to scene center
-            directionalLight.castShadow = true;
-            
-            // Shadow properties for realistic soft shadows
-            directionalLight.shadow.mapSize.width = 1024;
-            directionalLight.shadow.mapSize.height = 1024;
-            directionalLight.shadow.camera.near = 0.5;
-            directionalLight.shadow.camera.far = 10;
-            directionalLight.shadow.camera.left = -5;
-            directionalLight.shadow.camera.right = 5;
-            directionalLight.shadow.camera.top = 5;
-            directionalLight.shadow.camera.bottom = -5;
-            scene.add(directionalLight);
+            // 2. Create the Cube Geometry (0.5 meters size)
+            const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
 
-            // 3. Setup AR Button and Session Request (enabling required features)
-            const arButton = ARButton.createButton(renderer, {
-                requiredFeatures: ['hit-test', 'plane-detection', 'dom-overlay', 'light-estimation'],
-                optionalFeatures: ['dom-overlay-for-handheld-ar']
+            // 3. Create the Material (White with Light Blue Emission)
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xffffff,       // White Base
+                roughness: 0.1,        // Smooth/Shiny
+                metalness: 0.0,
+                emissive: 0x00ccff,    // Light Blue Glow
+                emissiveIntensity: 0.1
             });
-            arButton.id = 'ar-button';
-            arButton.textContent = 'Start AR';
-            document.body.appendChild(arButton);
+
+            // 4. Combine into a Mesh
+            const cube = new THREE.Mesh(geometry, material);
+            cube.name = "ProceduralCube";
+            scene.add(cube);
+
+            // 5. Export the virtual scene to a GLB (Binary) file in memory
+            const exporter = new THREE.GLTFExporter();
             
-            // 4. Create Reticle (Visual guide for placement)
-            const geometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
-            const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
-            reticle = new THREE.Mesh(geometry, material);
-            reticle.matrixAutoUpdate = false;
-            reticle.visible = false;
-            scene.add(reticle);
-
-            // 5. Create the Animated Minimal 3D Object
-            targetObject = createAnimatedObject();
-            targetObject.scale.set(objectScale, objectScale, objectScale);
-            targetObject.visible = false; // Hide until placed
-            scene.add(targetObject);
-
-            // 6. Setup Interaction Controller
-            controller = renderer.xr.getController(0);
-            controller.addEventListener('select', onSelect);
-            scene.add(controller);
-
-            // 7. Event Listeners for Complex Interactions (Pinch, Drag, Move)
-            setupInteractions();
-
-            // 8. Start the render loop
-            renderer.setAnimationLoop(render);
-
-            window.addEventListener('resize', onWindowResize);
-        }
-
-        /**
-         * Creates the "minimal, white, blue-accented, smooth, softly animated" object.
-         * @returns {THREE.Group} The complete 3D object group.
-         */
-        function createAnimatedObject() {
-            const group = new THREE.Group();
-            
-            // Main Body: Smooth, minimal white core (Icosahedron for modernity)
-            const coreGeometry = new THREE.IcosahedronGeometry(1, 1);
-            const coreMaterial = new THREE.MeshPhysicalMaterial({ 
-                color: 0xffffff,
-                metalness: 0.1,
-                roughness: 0.4,
-                clearcoat: 1.0,
-                clearcoatRoughness: 0.1,
-                shadowSide: THREE.BackSide,
-            });
-            const core = new THREE.Mesh(coreGeometry, coreMaterial);
-            core.castShadow = true;
-            core.name = 'Core';
-            group.add(core);
-
-            // Blue Accents: Neon edges using a wireframe (conceptualized glowing energy field)
-            const accentGeometry = new THREE.OctahedronGeometry(1.05, 0); // Slightly larger octahedron
-            const accentMaterial = new THREE.MeshBasicMaterial({
-                color: 0x00ffff, 
-                wireframe: true,
-                transparent: true,
-                opacity: 0.8,
-            });
-            const accent = new THREE.Mesh(accentGeometry, accentMaterial);
-            accent.name = 'Accent';
-            group.add(accent);
-            
-            // Soft Shadow Receiver (A subtle plane beneath the object for realistic shadow mapping)
-            const shadowPlaneGeometry = new THREE.PlaneGeometry(3, 3);
-            const shadowPlaneMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
-            const shadowPlane = new THREE.Mesh(shadowPlaneGeometry, shadowPlaneMaterial);
-            shadowPlane.rotation.x = -Math.PI / 2;
-            shadowPlane.position.y = -0.1; // Place just below the object
-            shadowPlane.receiveShadow = true;
-            shadowPlane.name = 'ShadowReceiver';
-            group.add(shadowPlane);
-
-            return group;
-        }
-
-        /**
-         * Handles object placement on the detected surface (select event).
-         */
-        function onSelect() {
-            if (reticle.visible && hitTestSource) {
-                // If the object is not yet placed, place it at the reticle's position.
-                if (!targetObject.visible) {
-                    targetObject.position.setFromMatrixPosition(reticle.matrix);
-                    targetObject.rotation.setFromRotationMatrix(reticle.matrix);
-                    targetObject.visible = true;
-                }
+            exporter.parse(scene, function (gltf) {
                 
-                // Optional: Allow re-placement by tapping the surface again
-                targetObject.position.setFromMatrixPosition(reticle.matrix);
-            }
-        }
-        
-        /**
-         * Sets up touch listeners for multi-touch interactions (Scale and Move).
-         */
-        function setupInteractions() {
-            const domElement = renderer.domElement;
-            
-            domElement.addEventListener('touchstart', (event) => {
-                if (event.touches.length === 1) {
-                    isDragging = true;
-                }
-                previousTouch = Array.from(event.touches).map(t => ({ x: t.pageX, y: t.pageY }));
-                event.preventDefault(); // Prevent accidental scrolling
-            });
-
-            domElement.addEventListener('touchend', () => {
-                isDragging = false;
-                previousTouch = [];
-            });
-
-            domElement.addEventListener('touchmove', (event) => {
-                if (!targetObject.visible) return;
-
-                const currentTouches = Array.from(event.touches).map(t => ({ x: t.pageX, y: t.pageY }));
-
-                if (currentTouches.length === 1 && previousTouch.length === 1 && isDragging) {
-                    // --- Drag to Rotate (Single Finger) ---
-                    const deltaX = currentTouches[0].x - previousTouch[0].x;
-                    objectRotationY += deltaX * 0.005; // Adjust sensitivity
-                    targetObject.rotation.y = objectRotationY;
-
-                } else if (currentTouches.length === 2 && previousTouch.length === 2) {
-                    // --- Pinch to Scale (Two Fingers) ---
-                    const dist = (t) => Math.hypot(t[0].x - t[1].x, t[0].y - t[1].y);
-                    const prevDist = dist(previousTouch);
-                    const currDist = dist(currentTouches);
-                    const scaleChange = (currDist - prevDist) * 0.001; // Scale sensitivity
-
-                    objectScale = Math.max(0.1, Math.min(2.0, objectScale + scaleChange));
-                    targetObject.scale.set(objectScale, objectScale, objectScale);
-
-                    // --- Two-Finger Move (Conceptual Translation) ---
-                    // This is complex in WebXR without platform-level gestures, so we will use two-finger motion for re-targeting the reticle/object for simplicity.
-                    const moveDeltaX = currentTouches[0].x - previousTouch[0].x;
-                    const moveDeltaY = currentTouches[0].y - previousTouch[0].y;
-                    
-                    // Simple translation: move the object in screen space
-                    targetObject.position.x += moveDeltaX * 0.0005 * objectScale;
-                    targetObject.position.z += moveDeltaY * 0.0005 * objectScale;
-                }
+                // Convert the 3D data to a Blob (virtual file)
+                const blob = new Blob([gltf], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob);
                 
-                previousTouch = currentTouches;
-            });
-        }
-        
-        /**
-         * Handles window resize events.
-         */
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        /**
-         * Requests the WebXR hit test source.
-         * @param {XRSession} session - The current WebXR session.
-         * @param {string} profile - The profile to use for the hit test.
-         */
-        function requestHitTestSource(session, frame) {
-            session.requestReferenceSpace('viewer').then(function (referenceSpace) {
-                // Request a hit test that tracks features in the environment (plane-detection).
-                session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
-                    hitTestSource = source;
-                });
-            });
-
-            session.addEventListener('end', function () {
-                hitTestSourceRequested = false;
-                hitTestSource = null;
-            });
-
-            hitTestSourceRequested = true;
-        }
-
-        /**
-         * Main render loop for Three.js and AR interactions.
-         * @param {number} time - Current time.
-         * @param {XRFrame} frame - Current XRFrame object.
-         */
-        function render(time, frame) {
-            const session = renderer.xr.getSession();
-
-            if (session) {
-                document.getElementById('info').textContent = 'WebAR Status: Tracking surfaces... Tap to place object.';
-
-                // 1. Request Hit Test Source (Plane Detection)
-                if (!hitTestSourceRequested) {
-                    requestHitTestSource(session, frame);
-                }
-
-                if (hitTestSource) {
-                    // 2. Perform Hit Test (Raycasting from camera center to scene)
-                    const referenceSpace = renderer.xr.getReferenceSpace();
-                    const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-                    if (hitTestResults.length > 0) {
-                        const hit = hitTestResults[0];
-                        // Get the position/orientation of the hit on the detected surface
-                        const pose = hit.getPose(referenceSpace); 
-                        
-                        // 3. Update Reticle Position/Visibility
-                        reticle.visible = true;
-                        reticle.matrix.fromArray(pose.transform.matrix);
-                        
-                        // If the object is not placed yet, show the reticle.
-                        if (!targetObject.visible) {
-                            targetObject.position.setFromMatrixPosition(reticle.matrix);
-                            targetObject.position.y += 0.5; // Lift slightly above the plane
-                        }
-
-                        // 4. Update the object's shadow plane (for realistic shadows/occlusion)
-                        const shadowReceiver = targetObject.getObjectByName('ShadowReceiver');
-                        if (shadowReceiver) {
-                            // Place the shadow plane at the hit point to receive the shadow naturally
-                            shadowReceiver.position.setFromMatrixPosition(reticle.matrix);
-                            shadowReceiver.position.y = reticle.position.y;
-                        }
-                    } else {
-                        // No surface detected
-                        reticle.visible = false;
-                    }
-                }
+                // 6. Inject the Blob URL into the AR Viewer
+                const viewer = document.getElementById('ar-viewer');
+                viewer.src = url;
                 
-                // 5. Update Light Estimation (Conceptual)
-                // In a production environment, you would use frame.getLightEstimate(lightProbe) here.
-                // For this blueprint, we simulate the 'soft dynamic shadow' animation.
-                const light = scene.getObjectByProperty('isDirectionalLight', true);
-                if (light) {
-                     // Simple conceptual movement to simulate light changes
-                    light.position.x = Math.sin(time / 2000) * 0.5; 
-                    light.position.z = Math.cos(time / 2000) * 0.5;
-                }
-            } else {
-                document.getElementById('info').textContent = 'WebAR Status: Waiting for AR session...';
-            }
-            
-            // 6. Soft Animation (Pulsing and rotating)
-            if (targetObject.visible) {
-                // Subtle Rotation
-                targetObject.rotation.y += ROTATE_SPEED;
-                
-                // Soft Pulsing Scale (Animation)
-                const pulse = 1 + Math.sin(time * PULSE_SPEED) * 0.05; // 5% pulse
-                const currentScale = targetObject.scale.x;
-                targetObject.scale.set(currentScale * pulse, currentScale * pulse, currentScale * pulse); 
-            }
+                // Hide loader
+                document.getElementById('loader').style.display = 'none';
+                console.log("3D Cube Generated and Loaded into AR Viewer");
 
-            renderer.render(scene, camera);
+            }, { binary: true });
         }
 
-        init();
-        
+        // Run the generation immediately
+        window.addEventListener('load', generateCubeAndRunAR);
     </script>
 </body>
 </html>
