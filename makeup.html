@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Beauty Effect Simulator</title>
+    <title>Gemini AR Blueprint</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="importmap">
         {
@@ -14,295 +14,256 @@
         }
     </script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #1a1a2e; }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-        }
-        canvas { display: block; }
-        #controls {
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            padding: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(10px);
-            border-top-left-radius: 20px;
-            border-top-right-radius: 20px;
-            box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.2);
-            z-index: 10;
-        }
-        .control-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            font-weight: 600;
-            color: #1a1a2e;
-            margin-bottom: 5px;
-            font-size: 0.9rem;
-        }
-        input[type=range] {
-            width: 100%;
-            -webkit-appearance: none;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            cursor: pointer;
-            outline: none;
-            transition: background .2s;
-        }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #E685A6;
-            border-radius: 50%;
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-        }
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #f0f0f0; }
         #info {
-            position: absolute; top: 10px; left: 10px; padding: 8px; background: rgba(0,0,0,0.5); color: white; border-radius: 8px;
-            font-size: 0.8rem;
+            position: absolute; top: 0; left: 0; width: 100%; padding: 10px; text-align: center;
+            background: rgba(0, 0, 0, 0.5); color: white; z-index: 1000;
         }
-        /* Simulated Camera Feed (Black for simplicity, but a video stream would be here) */
-        #video-feed {
+        #ar-button {
             position: absolute;
-            width: 100%;
-            height: 100%;
-            background: #111; /* Simulates the camera background */
-            z-index: 1;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            color: white;
+            background: #008aff;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 138, 255, 0.5);
+            transition: background 0.3s, transform 0.1s;
+        }
+        #ar-button:hover {
+            background: #006edd;
+        }
+        #ar-button:active {
+            transform: translateX(-50%) scale(0.98);
         }
     </style>
 </head>
 <body>
-    <div id="canvas-container">
-        <div id="video-feed"></div>
-    </div>
     <div id="info">
-        
-        <p>AR Makeup Effect Simulation. Face tracking is simulated by the floating mesh.</p>
+        WebAR Status: Not Initialized. Use the "Start AR" button on a mobile device.
     </div>
     
-    <div id="controls">
-        <h3 class="text-lg font-bold text-[#E685A6] mb-3">Makeup Intensity Controls</h3>
-        <div class="control-group">
-            <label for="lipIntensity">Glossy Pink Lips Intensity</label>
-            <input type="range" id="lipIntensity" min="0" max="1" step="0.01" value="0.7">
-        </div>
-        <div class="control-group">
-            <label for="eyeShadowStrength">Eyeshadow Gradient Strength</label>
-            <input type="range" id="eyeShadowStrength" min="0" max="1" step="0.01" value="0.8">
-        </div>
-        <div class="control-group">
-            <label for="skinSmoothing">Skin Texture Smoothing</label>
-            <input type="range" id="skinSmoothing" min="0" max="1" step="0.01" value="0.5">
-        </div>
-    </div>
-
     <script type="module">
         import * as THREE from 'three';
-
-        // --- Configuration & Colors ---
-        const CONFIG = {
-            // Specified Colors (Hex to Normalized RGB)
-            foundationColor: new THREE.Color(0xd2b48c).multiplyScalar(0.9), // Soft neutral beige (using tan as close sim)
-            blushColor: new THREE.Color(0xF4A996), // Soft peach
-            lipColor: new THREE.Color(0xE685A6), // Glossy pink
-            eyeshadowStart: new THREE.Color(0xC6A27E), // Warm beige
-            eyeshadowEnd: new THREE.Color(0x8B6238), // Light brown
-            highlightColor: new THREE.Color(0xFFF1D9), // Subtle cheekbone highlight
-        };
-
-        let camera, scene, renderer, faceMesh;
-        let uniformSmoothing, uniformLipIntensity, uniformEyeShadowStrength;
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
         
-        // --- Shaders for Realistic Makeup Application ---
+        // --- Core Setup Variables ---
+        let camera, scene, renderer;
+        let controller;
+        let reticle, targetObject;
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
         
-        // Vertex Shader: Standard position mapping
-        const vertexShader = `
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-            void main() {
-                vUv = uv;
-                vNormal = normalize(normalMatrix * normal);
-                vPosition = (modelViewMatrix * vec4(position, 1.0)).xyz;
-                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-        `;
-
-        // Fragment Shader: Applies all makeup layers dynamically
-        const fragmentShader = `
-            uniform float time;
-            uniform float skinSmoothing;
-            uniform float lipIntensity;
-            uniform float eyeShadowStrength;
-
-            uniform vec3 foundationColor;
-            uniform vec3 blushColor;
-            uniform vec3 lipColor;
-            uniform vec3 eyeshadowStart;
-            uniform vec3 eyeshadowEnd;
-            uniform vec3 highlightColor;
-
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            varying vec3 vPosition;
-
-            // Simple function to simulate lighting and normal influence
-            float getLighting() {
-                // Simulates dynamic lighting adaptation
-                return max(0.0, dot(vNormal, normalize(vec3(sin(time), 1.0, cos(time)))));
-            }
-            
-            // Function to blend colors realistically based on normal/light
-            vec3 applyColor(vec3 base, vec3 color, float intensity) {
-                float light = getLighting();
-                vec3 finalColor = mix(base, color, intensity);
-                
-                // Add subtle shading and highlight based on position/normal (occlusion/depth simulation)
-                float normalInfluence = max(0.0, dot(vNormal, normalize(vec3(0.0, 0.0, 1.0))));
-                finalColor *= (0.8 + light * 0.2); // Simple dynamic brightness
-                finalColor = mix(finalColor, base, smoothstep(0.0, 0.3, length(vNormal))); // Occlusion blend
-                
-                return finalColor;
-            }
-
-            void main() {
-                // Base skin color (simulated) - should include texture data in a real AR app
-                vec3 baseColor = foundationColor;
-                
-                // --- 1. Foundation and Skin Smoothing ---
-                // The base color is the foundation. We use skinSmoothing to simulate blurring fine detail.
-                float smoothMix = skinSmoothing * 0.4;
-                baseColor = mix(baseColor, foundationColor, smoothMix); 
-                
-                // --- 2. Lip Application (Glossy Pink) ---
-                // Define lip area using UV coordinates (simulated landmarks)
-                float lipMask = smoothstep(0.3, 0.4, vUv.y) - smoothstep(0.5, 0.6, vUv.y);
-                lipMask *= (1.0 - smoothstep(0.0, 0.1, abs(vUv.x - 0.5) * 2.0));
-                
-                vec3 appliedLipColor = applyColor(baseColor, lipColor, lipIntensity);
-                baseColor = mix(baseColor, appliedLipColor, lipMask * lipIntensity);
-                
-                // Add Gloss (simulated specular highlight)
-                if (lipMask > 0.1) {
-                    float specular = pow(max(0.0, dot(vNormal, normalize(vec3(0.0, 0.5, 1.0)))), 30.0);
-                    baseColor += highlightColor * specular * 0.5 * lipIntensity;
-                }
-
-                // --- 3. Eyeshadow Gradient (Warm Beige to Light Brown) ---
-                // Define eye area using UV coordinates
-                float eyeMask = 0.0;
-                eyeMask += smoothstep(0.8, 0.9, vUv.y); // Top of the mesh
-                eyeMask *= (1.0 - smoothstep(0.0, 0.1, abs(vUv.x - 0.5) * 2.0)); // Center area
-                
-                // Create gradient based on UV Y (vertical position)
-                vec3 gradientColor = mix(eyeshadowStart, eyeshadowEnd, vUv.y * 2.0 - 1.0);
-                
-                vec3 appliedEyeColor = applyColor(baseColor, gradientColor, eyeShadowStrength * 0.8);
-                baseColor = mix(baseColor, appliedEyeColor, eyeMask * eyeShadowStrength);
-
-                // --- 4. Blush and Highlight ---
-                // Define cheekbone area (simulated landmarks)
-                float cheekMask = 0.0;
-                cheekMask += smoothstep(0.5, 0.6, vUv.y) * (1.0 - smoothstep(0.2, 0.4, abs(vUv.x - 0.5) * 2.0));
-                
-                vec3 appliedBlushColor = applyColor(baseColor, blushColor, 0.6); // Fixed intensity for blush
-                baseColor = mix(baseColor, appliedBlushColor, cheekMask * 0.3);
-
-                // Subtle Cheekbone Highlight
-                float highlightMask = smoothstep(0.55, 0.65, vUv.y) * smoothstep(0.1, 0.2, abs(vUv.x - 0.5) * 2.0);
-                float specularHighlight = pow(max(0.0, dot(vNormal, normalize(vec3(0.5, 0.5, 1.0)))), 50.0);
-                baseColor += highlightColor * specularHighlight * highlightMask * 0.5;
-
-                // --- 5. Eyeliner and Brows (Visual only, simple UV line) ---
-                // Ultra-thin black eyeliner simulation
-                float eyeliner = 1.0 - smoothstep(0.88, 0.9, vUv.y) * smoothstep(0.0, 0.01, abs(vUv.x - 0.5));
-                baseColor = mix(baseColor, vec3(0.0, 0.0, 0.0), eyeliner * 0.5);
-
-                gl_FragColor = vec4(baseColor, 1.0);
-            }
-        `;
+        // --- Interaction State ---
+        let isDragging = false;
+        let previousTouch = [];
+        let objectRotationY = 0;
+        let objectScale = 0.5;
+        
+        // --- Animation Constants ---
+        const PULSE_SPEED = 0.005;
+        const ROTATE_SPEED = 0.002;
 
         /**
-         * Initializes the Three.js scene and components.
+         * Initializes the Three.js scene, camera, and renderer.
          */
         function init() {
-            // Setup Scene and Camera (Simulated AR View)
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 2;
-
-            // Renderer setup
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            
+            // 1. Setup Renderer with AR compatibility
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x000000, 0); // Transparent to show the simulated video feed
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.shadowMap.enabled = true; // Crucial for dynamic shadows
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
 
-            // --- Makeup Mesh (Placeholder for Face Mesh Tracking Data) ---
+            // 2. Add Lighting for light estimation and shadows
+            const ambientLight = new THREE.AmbientLight(0xffffff, 2);
+            scene.add(ambientLight);
+
+            // Directional light for shadows (conceptual placement based on environment understanding)
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 3);
+            directionalLight.position.set(0.5, 5, 3); // Position relative to scene center
+            directionalLight.castShadow = true;
             
-            // We use a complex, rounded geometry to simulate the face surface and UV map
-            const geometry = new THREE.SphereGeometry(1.5, 64, 64);
+            // Shadow properties for realistic soft shadows
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 10;
+            directionalLight.shadow.camera.left = -5;
+            directionalLight.shadow.camera.right = 5;
+            directionalLight.shadow.camera.top = 5;
+            directionalLight.shadow.camera.bottom = -5;
+            scene.add(directionalLight);
+
+            // 3. Setup AR Button and Session Request (enabling required features)
+            const arButton = ARButton.createButton(renderer, {
+                requiredFeatures: ['hit-test', 'plane-detection', 'dom-overlay', 'light-estimation'],
+                optionalFeatures: ['dom-overlay-for-handheld-ar']
+            });
+            arButton.id = 'ar-button';
+            arButton.textContent = 'Start AR';
+            document.body.appendChild(arButton);
             
-            // Initialize Uniforms
-            uniformLipIntensity = { value: 0.7 };
-            uniformEyeShadowStrength = { value: 0.8 };
-            uniformSmoothing = { value: 0.5 };
+            // 4. Create Reticle (Visual guide for placement)
+            const geometry = new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2);
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+            reticle = new THREE.Mesh(geometry, material);
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
 
-            const makeupMaterial = new THREE.ShaderMaterial({
-                uniforms: {
-                    time: { value: 0.0 },
-                    skinSmoothing: uniformSmoothing,
-                    lipIntensity: uniformLipIntensity,
-                    eyeShadowStrength: uniformEyeShadowStrength,
-                    foundationColor: { value: CONFIG.foundationColor },
-                    blushColor: { value: CONFIG.blushColor },
-                    lipColor: { value: CONFIG.lipColor },
-                    eyeshadowStart: { value: CONFIG.eyeshadowStart },
-                    eyeshadowEnd: { value: CONFIG.eyeshadowEnd },
-                    highlightColor: { value: CONFIG.highlightColor },
-                },
-                vertexShader: vertexShader,
-                fragmentShader: fragmentShader,
-                // Ensure depth testing and writing are set correctly for "occlusion handling" simulation
-                transparent: true,
-                depthWrite: true
-            });
+            // 5. Create the Animated Minimal 3D Object
+            targetObject = createAnimatedObject();
+            targetObject.scale.set(objectScale, objectScale, objectScale);
+            targetObject.visible = false; // Hide until placed
+            scene.add(targetObject);
 
-            faceMesh = new THREE.Mesh(geometry, makeupMaterial);
-            scene.add(faceMesh);
-            
-            // --- Lighting Simulation (Dynamic Lighting Adaptation) ---
-            const light = new THREE.DirectionalLight(0xffffff, 2);
-            light.position.set(0, 0, 10);
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            // 6. Setup Interaction Controller
+            controller = renderer.xr.getController(0);
+            controller.addEventListener('select', onSelect);
+            scene.add(controller);
 
-            // --- UI Listeners ---
-            document.getElementById('lipIntensity').addEventListener('input', (event) => {
-                uniformLipIntensity.value = parseFloat(event.target.value);
-            });
-            document.getElementById('eyeShadowStrength').addEventListener('input', (event) => {
-                uniformEyeShadowStrength.value = parseFloat(event.target.value);
-            });
-            document.getElementById('skinSmoothing').addEventListener('input', (event) => {
-                uniformSmoothing.value = parseFloat(event.target.value);
-            });
+            // 7. Event Listeners for Complex Interactions (Pinch, Drag, Move)
+            setupInteractions();
+
+            // 8. Start the render loop
+            renderer.setAnimationLoop(render);
 
             window.addEventListener('resize', onWindowResize);
-            renderer.setAnimationLoop(animate);
         }
 
         /**
-         * Handles window resize.
+         * Creates the "minimal, white, blue-accented, smooth, softly animated" object.
+         * @returns {THREE.Group} The complete 3D object group.
+         */
+        function createAnimatedObject() {
+            const group = new THREE.Group();
+            
+            // Main Body: Smooth, minimal white core (Icosahedron for modernity)
+            const coreGeometry = new THREE.IcosahedronGeometry(1, 1);
+            const coreMaterial = new THREE.MeshPhysicalMaterial({ 
+                color: 0xffffff,
+                metalness: 0.1,
+                roughness: 0.4,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1,
+                shadowSide: THREE.BackSide,
+            });
+            const core = new THREE.Mesh(coreGeometry, coreMaterial);
+            core.castShadow = true;
+            core.name = 'Core';
+            group.add(core);
+
+            // Blue Accents: Neon edges using a wireframe (conceptualized glowing energy field)
+            const accentGeometry = new THREE.OctahedronGeometry(1.05, 0); // Slightly larger octahedron
+            const accentMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff, 
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8,
+            });
+            const accent = new THREE.Mesh(accentGeometry, accentMaterial);
+            accent.name = 'Accent';
+            group.add(accent);
+            
+            // Soft Shadow Receiver (A subtle plane beneath the object for realistic shadow mapping)
+            const shadowPlaneGeometry = new THREE.PlaneGeometry(3, 3);
+            const shadowPlaneMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
+            const shadowPlane = new THREE.Mesh(shadowPlaneGeometry, shadowPlaneMaterial);
+            shadowPlane.rotation.x = -Math.PI / 2;
+            shadowPlane.position.y = -0.1; // Place just below the object
+            shadowPlane.receiveShadow = true;
+            shadowPlane.name = 'ShadowReceiver';
+            group.add(shadowPlane);
+
+            return group;
+        }
+
+        /**
+         * Handles object placement on the detected surface (select event).
+         */
+        function onSelect() {
+            if (reticle.visible && hitTestSource) {
+                // If the object is not yet placed, place it at the reticle's position.
+                if (!targetObject.visible) {
+                    targetObject.position.setFromMatrixPosition(reticle.matrix);
+                    targetObject.rotation.setFromRotationMatrix(reticle.matrix);
+                    targetObject.visible = true;
+                }
+                
+                // Optional: Allow re-placement by tapping the surface again
+                targetObject.position.setFromMatrixPosition(reticle.matrix);
+            }
+        }
+        
+        /**
+         * Sets up touch listeners for multi-touch interactions (Scale and Move).
+         */
+        function setupInteractions() {
+            const domElement = renderer.domElement;
+            
+            domElement.addEventListener('touchstart', (event) => {
+                if (event.touches.length === 1) {
+                    isDragging = true;
+                }
+                previousTouch = Array.from(event.touches).map(t => ({ x: t.pageX, y: t.pageY }));
+                event.preventDefault(); // Prevent accidental scrolling
+            });
+
+            domElement.addEventListener('touchend', () => {
+                isDragging = false;
+                previousTouch = [];
+            });
+
+            domElement.addEventListener('touchmove', (event) => {
+                if (!targetObject.visible) return;
+
+                const currentTouches = Array.from(event.touches).map(t => ({ x: t.pageX, y: t.pageY }));
+
+                if (currentTouches.length === 1 && previousTouch.length === 1 && isDragging) {
+                    // --- Drag to Rotate (Single Finger) ---
+                    const deltaX = currentTouches[0].x - previousTouch[0].x;
+                    objectRotationY += deltaX * 0.005; // Adjust sensitivity
+                    targetObject.rotation.y = objectRotationY;
+
+                } else if (currentTouches.length === 2 && previousTouch.length === 2) {
+                    // --- Pinch to Scale (Two Fingers) ---
+                    const dist = (t) => Math.hypot(t[0].x - t[1].x, t[0].y - t[1].y);
+                    const prevDist = dist(previousTouch);
+                    const currDist = dist(currentTouches);
+                    const scaleChange = (currDist - prevDist) * 0.001; // Scale sensitivity
+
+                    objectScale = Math.max(0.1, Math.min(2.0, objectScale + scaleChange));
+                    targetObject.scale.set(objectScale, objectScale, objectScale);
+
+                    // --- Two-Finger Move (Conceptual Translation) ---
+                    // This is complex in WebXR without platform-level gestures, so we will use two-finger motion for re-targeting the reticle/object for simplicity.
+                    const moveDeltaX = currentTouches[0].x - previousTouch[0].x;
+                    const moveDeltaY = currentTouches[0].y - previousTouch[0].y;
+                    
+                    // Simple translation: move the object in screen space
+                    targetObject.position.x += moveDeltaX * 0.0005 * objectScale;
+                    targetObject.position.z += moveDeltaY * 0.0005 * objectScale;
+                }
+                
+                previousTouch = currentTouches;
+            });
+        }
+        
+        /**
+         * Handles window resize events.
          */
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -311,21 +272,104 @@
         }
 
         /**
-         * Main animation loop.
-         * Simulates face tracking movement and dynamic lighting changes.
+         * Requests the WebXR hit test source.
+         * @param {XRSession} session - The current WebXR session.
+         * @param {string} profile - The profile to use for the hit test.
          */
-        function animate(time) {
-            // Update time uniform for dynamic effects (pulsing, light changes)
-            faceMesh.material.uniforms.time.value = time * 0.001;
+        function requestHitTestSource(session, frame) {
+            session.requestReferenceSpace('viewer').then(function (referenceSpace) {
+                // Request a hit test that tracks features in the environment (plane-detection).
+                session.requestHitTestSource({ space: referenceSpace }).then(function (source) {
+                    hitTestSource = source;
+                });
+            });
+
+            session.addEventListener('end', function () {
+                hitTestSourceRequested = false;
+                hitTestSource = null;
+            });
+
+            hitTestSourceRequested = true;
+        }
+
+        /**
+         * Main render loop for Three.js and AR interactions.
+         * @param {number} time - Current time.
+         * @param {XRFrame} frame - Current XRFrame object.
+         */
+        function render(time, frame) {
+            const session = renderer.xr.getSession();
+
+            if (session) {
+                document.getElementById('info').textContent = 'WebAR Status: Tracking surfaces... Tap to place object.';
+
+                // 1. Request Hit Test Source (Plane Detection)
+                if (!hitTestSourceRequested) {
+                    requestHitTestSource(session, frame);
+                }
+
+                if (hitTestSource) {
+                    // 2. Perform Hit Test (Raycasting from camera center to scene)
+                    const referenceSpace = renderer.xr.getReferenceSpace();
+                    const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+                    if (hitTestResults.length > 0) {
+                        const hit = hitTestResults[0];
+                        // Get the position/orientation of the hit on the detected surface
+                        const pose = hit.getPose(referenceSpace); 
+                        
+                        // 3. Update Reticle Position/Visibility
+                        reticle.visible = true;
+                        reticle.matrix.fromArray(pose.transform.matrix);
+                        
+                        // If the object is not placed yet, show the reticle.
+                        if (!targetObject.visible) {
+                            targetObject.position.setFromMatrixPosition(reticle.matrix);
+                            targetObject.position.y += 0.5; // Lift slightly above the plane
+                        }
+
+                        // 4. Update the object's shadow plane (for realistic shadows/occlusion)
+                        const shadowReceiver = targetObject.getObjectByName('ShadowReceiver');
+                        if (shadowReceiver) {
+                            // Place the shadow plane at the hit point to receive the shadow naturally
+                            shadowReceiver.position.setFromMatrixPosition(reticle.matrix);
+                            shadowReceiver.position.y = reticle.position.y;
+                        }
+                    } else {
+                        // No surface detected
+                        reticle.visible = false;
+                    }
+                }
+                
+                // 5. Update Light Estimation (Conceptual)
+                // In a production environment, you would use frame.getLightEstimate(lightProbe) here.
+                // For this blueprint, we simulate the 'soft dynamic shadow' animation.
+                const light = scene.getObjectByProperty('isDirectionalLight', true);
+                if (light) {
+                     // Simple conceptual movement to simulate light changes
+                    light.position.x = Math.sin(time / 2000) * 0.5; 
+                    light.position.z = Math.cos(time / 2000) * 0.5;
+                }
+            } else {
+                document.getElementById('info').textContent = 'WebAR Status: Waiting for AR session...';
+            }
             
-            // Simulate subtle face movement (Advanced Face Mesh Tracking)
-            faceMesh.rotation.y = Math.sin(time * 0.0005) * 0.1;
-            faceMesh.rotation.x = Math.cos(time * 0.0003) * 0.05;
+            // 6. Soft Animation (Pulsing and rotating)
+            if (targetObject.visible) {
+                // Subtle Rotation
+                targetObject.rotation.y += ROTATE_SPEED;
+                
+                // Soft Pulsing Scale (Animation)
+                const pulse = 1 + Math.sin(time * PULSE_SPEED) * 0.05; // 5% pulse
+                const currentScale = targetObject.scale.x;
+                targetObject.scale.set(currentScale * pulse, currentScale * pulse, currentScale * pulse); 
+            }
 
             renderer.render(scene, camera);
         }
 
         init();
+        
     </script>
 </body>
 </html>
