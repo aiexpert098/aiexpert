@@ -1,0 +1,1 @@
+<%@ Application Codebehind="Global.asax.cs" Inherits="SPRestWebApiV2.WebApiApplication" Language="C#" %>
