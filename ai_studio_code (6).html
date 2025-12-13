@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق مكياج كامل - Full Glam AR</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; font-family: 'Segoe UI', sans-serif; }
+        
+        .container { position: relative; width: 100vw; height: 100vh; }
+        
+        #video-element {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+        #output-canvas {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+
+        /* واجهة تحكم بسيطة */
+        #ui {
+            position: absolute; bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; flex-direction: column; align-items: center; gap: 10px;
+            z-index: 10;
+        }
+
+        .controls {
+            display: flex; gap: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px 25px; border-radius: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        label { color: white; font-size: 14px; cursor: pointer; display: flex; align-items: center; gap: 5px;}
+        input[type="checkbox"] { accent-color: #d4a373; width: 18px; height: 18px; }
+
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: #d4a373; font-size: 24px; z-index: 20; font-weight: bold;
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+    </style>
+
+    <!-- MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">جارٍ تحضير أدوات التجميل...</div>
+
+    <div class="container">
+        <video id="video-element" playsinline></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+
+    <div id="ui">
+        <div style="color:white; margin-bottom:5px;">Full Glam Look</div>
+        <div class="controls">
+            <label><input type="checkbox" id="toggle-lips" checked> شفاه (Lips)</label>
+            <label><input type="checkbox" id="toggle-eyes" checked> عيون (Eyes)</label>
+            <label><input type="checkbox" id="toggle-face" checked> كونتور (Face)</label>
+        </div>
+    </div>
+
+<script>
+    const videoElement = document.getElementById('video-element');
+    const canvasElement = document.getElementById('output-canvas');
+    const ctx = canvasElement.getContext('2d');
+    const loadingMsg = document.getElementById('loading');
+
+    // --- إعدادات المظهر (مستوحاة من الصورة) ---
+    const LOOK = {
+        lips: { color: '#a85d5d', opacity: 0.7, blend: 'multiply' }, // لون وردي غامق نيود
+        eyeliner: { color: '#0f0f0f', opacity: 0.8, width: 3 },      // أسود فاحم
+        eyeshadow: { color: '#5c3a2e', opacity: 0.4 },               // بني دافئ
+        brows: { color: '#1a100a', opacity: 0.5 },                   // بني غامق جداً
+        blush: { color: '#b56a5d', opacity: 0.3 }                    // خوخي برونزي
+    };
+
+    // --- نقاط الوجه (Landmark Indices) ---
+    // هذه النقاط تحدد أماكن الملامح بدقة من بين 468 نقطة
+    const INDICES = {
+        lipsUpper: [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 61],
+        lipsLower: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 61],
+        leftEyebrow: [70, 63, 105, 66, 107, 55, 65, 52, 53, 46],
+        rightEyebrow: [336, 296, 334, 293, 300, 276, 283, 282, 295, 285],
+        leftEyeLiner: [33, 7, 163, 144, 145, 153, 154, 155, 133], // خط الرموش العلوي
+        rightEyeLiner: [362, 382, 381, 380, 374, 373, 390, 249, 263],
+        leftEyeShadow: [226, 247, 30, 29, 27, 28, 56, 190, 243, 112, 26, 22, 23, 24, 110, 25], // منطقة الجفن
+        rightEyeShadow: [463, 414, 286, 258, 257, 259, 260, 467, 359, 255, 339, 254, 253, 252, 256, 341]
+    };
+
+    // نقاط الخدود للكونتور (مركز تقريبي)
+    const CHEEK_LEFT_CENTER = 116; // عظمة الخد اليسرى
+    const CHEEK_RIGHT_CENTER = 345; // عظمة الخد اليمنى
+
+    // Toggles
+    const toggles = {
+        lips: document.getElementById('toggle-lips'),
+        eyes: document.getElementById('toggle-eyes'),
+        face: document.getElementById('toggle-face')
+    };
+
+    function onResults(results) {
+        loadingMsg.style.display = 'none';
+
+        // ضبط الأبعاد
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const landmarks = results.multiFaceLandmarks[0];
+
+            // 1. رسم الشفاه (Matte Nude Lip)
+            if (toggles.lips.checked) {
+                ctx.save();
+                ctx.globalCompositeOperation = LOOK.lips.blend;
+                ctx.fillStyle = LOOK.lips.color;
+                ctx.globalAlpha = LOOK.lips.opacity;
+                ctx.filter = 'blur(3px)'; // تمويه خفيف لدمج اللون
+                fillPath(ctx, landmarks, INDICES.lipsUpper);
+                fillPath(ctx, landmarks, INDICES.lipsLower);
+                ctx.restore();
+            }
+
+            // 2. مكياج العيون (Brows + Eyeshadow + Eyeliner)
+            if (toggles.eyes.checked) {
+                ctx.save();
+                
+                // أ. الحواجب (تغميق وتحديد)
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = LOOK.brows.color;
+                ctx.globalAlpha = LOOK.brows.opacity;
+                ctx.filter = 'blur(4px)'; // حواجب ناعمة (Powder Brows style)
+                fillPath(ctx, landmarks, INDICES.leftEyebrow);
+                fillPath(ctx, landmarks, INDICES.rightEyebrow);
+
+                // ب. ظلال العيون (Eyeshadow) - لون دخاني
+                ctx.globalCompositeOperation = 'multiply'; 
+                ctx.fillStyle = LOOK.eyeshadow.color;
+                ctx.globalAlpha = LOOK.eyeshadow.opacity;
+                ctx.filter = 'blur(8px)'; // تمويه عالي جداً لدمج الظلال
+                // نستخدم نقاط تقريبية للجفن
+                fillPath(ctx, landmarks, [55, 107, 66, 105, 63, 70, 46, 53, 52, 65]); // يسار تقريبي
+                fillPath(ctx, landmarks, [285, 295, 282, 283, 276, 300, 293, 334, 296, 336]); // يمين تقريبي
+
+                // ج. الآيلاينر (Eyeliner) - رسم خطوط
+                ctx.globalCompositeOperation = 'source-over'; // رسم عادي فوق العين
+                ctx.strokeStyle = LOOK.eyeliner.color;
+                ctx.lineWidth = LOOK.eyeliner.width;
+                ctx.globalAlpha = LOOK.eyeliner.opacity;
+                ctx.filter = 'blur(1px)'; // تنعيم خفيف جداً للحواف
+                strokePath(ctx, landmarks, INDICES.leftEyeLiner);
+                strokePath(ctx, landmarks, INDICES.rightEyeLiner);
+                
+                ctx.restore();
+            }
+
+            // 3. الوجه (Blush & Contour)
+            if (toggles.face.checked) {
+                ctx.save();
+                // نستخدم التدرج الشعاعي (Radial Gradient) لمحاكاة الفرشاة
+                drawBlush(ctx, landmarks, CHEEK_LEFT_CENTER);
+                drawBlush(ctx, landmarks, CHEEK_RIGHT_CENTER);
+                ctx.restore();
+            }
+        }
+    }
+
+    // --- دوال الرسم المساعدة ---
+
+    function fillPath(ctx, landmarks, indices) {
+        ctx.beginPath();
+        const p0 = landmarks[indices[0]];
+        ctx.moveTo(p0.x * canvasElement.width, p0.y * canvasElement.height);
+        for (let i = 1; i < indices.length; i++) {
+            const p = landmarks[indices[i]];
+            ctx.lineTo(p.x * canvasElement.width, p.y * canvasElement.height);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function strokePath(ctx, landmarks, indices) {
+        ctx.beginPath();
+        // نبدأ من منتصف العين تقريباً لتجنب رسم خط كامل دائري، نريد فقط الرموش
+        // المصفوفة مرتبة، سنأخذ قوساً منها يمثل الجفن العلوي
+        // لتسيط الأمر هنا سنرسم الخط بالكامل ولكن بسماكة متغيرة
+        const p0 = landmarks[indices[0]];
+        ctx.moveTo(p0.x * canvasElement.width, p0.y * canvasElement.height);
+        for (let i = 1; i < indices.length; i++) {
+            const p = landmarks[indices[i]];
+            ctx.lineTo(p.x * canvasElement.width, p.y * canvasElement.height);
+        }
+        ctx.stroke();
+    }
+
+    function drawBlush(ctx, landmarks, centerIndex) {
+        const center = landmarks[centerIndex];
+        const cx = center.x * canvasElement.width;
+        const cy = center.y * canvasElement.height;
+        
+        // حساب نصف القطر بناءً على حجم الوجه (المسافة بين العينين مثلاً) ليكون متجاوباً
+        // لكن للتبسيط سنستخدم قيمة ثابتة نسبياً
+        const radius = canvasElement.width * 0.08; 
+
+        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+        gradient.addColorStop(0, LOOK.blush.color);
+        gradient.addColorStop(1, 'transparent');
+
+        ctx.fillStyle = gradient;
+        ctx.globalAlpha = LOOK.blush.opacity;
+        ctx.globalCompositeOperation = 'multiply'; // وضع الدمج للكونتور
+        ctx.filter = 'blur(10px)'; // تمويه عالي جداً
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    // --- إعداد وتشغيل MediaPipe ---
+    const faceMesh = new FaceMesh({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+    }});
+
+    faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true, // ضروري جداً لدقة العيون والشفاه
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await faceMesh.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+    });
+    camera.start();
+
+</script>
+</body>
+</html>
