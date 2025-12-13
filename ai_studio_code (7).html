@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مكياج احترافي مثبت (No Jitter)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        .container { position: relative; width: 100vw; height: 100vh; }
+        
+        #video-element {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+        #output-canvas {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+
+        #ui {
+            position: absolute; bottom: 20px; width: 100%; text-align: center;
+            z-index: 10; pointer-events: none;
+        }
+        .status {
+            display: inline-block;
+            background: rgba(0,0,0,0.5); color: #fff;
+            padding: 8px 16px; border-radius: 20px;
+            font-size: 14px; backdrop-filter: blur(5px);
+        }
+    </style>
+
+    <!-- MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div class="container">
+        <video id="video-element" playsinline></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+
+    <div id="ui">
+        <div class="status" id="status-msg">جارٍ ضبط ثبات التتبع...</div>
+    </div>
+
+<script>
+    const videoElement = document.getElementById('video-element');
+    const canvasElement = document.getElementById('output-canvas');
+    const ctx = canvasElement.getContext('2d');
+    const statusMsg = document.getElementById('status-msg');
+
+    // --- إعدادات التنعيم (السر) ---
+    // القيمة بين 0 و 1. 
+    // 0.1 = ناعم جداً وبطيء (Laggy)
+    // 0.9 = سريع جداً ومهتز (Jittery)
+    // 0.25 هو التوازن المثالي للمكياج
+    const SMOOTHING_FACTOR = 0.25; 
+    let smoothedLandmarks = null; // لتخزين النقاط السابقة
+
+    // --- تعريفات الألوان والستايل ---
+    const STYLE = {
+        lips: { color: '#8a3a3a', opacity: 0.65 }, // Matte Mauve
+        eyeliner: { color: '#000000', opacity: 0.85 },
+        eyeshadow: { color: '#4a3b32', opacity: 0.35 }, // Warm Brown
+        blush: { color: '#d16d6d', opacity: 0.25 }
+    };
+
+    // --- خرائط النقاط (Indices) ---
+    const INDICES = {
+        lipsUpper: [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 61],
+        lipsLower: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 61],
+        // آيلاينر (الجفن العلوي فقط مع زاوية خارجية)
+        leftEyeliner: [33, 7, 163, 144, 145, 153, 154, 155, 133, 243, 190, 56, 28, 27, 29, 30, 247, 33],
+        rightEyeliner: [362, 382, 381, 380, 374, 373, 390, 249, 263, 463, 414, 286, 258, 257, 259, 260, 467, 362],
+        // كونتور الخد
+        leftCheek: 116,
+        rightCheek: 345
+    };
+
+    function lerp(start, end, amt) {
+        return (1 - amt) * start + amt * end;
+    }
+
+    function onResults(results) {
+        statusMsg.style.display = 'none';
+
+        // ضبط حجم الكانفاس
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const rawLandmarks = results.multiFaceLandmarks[0];
+
+            // 1. خوارزمية التنعيم (Smoothing Algorithm)
+            if (!smoothedLandmarks) {
+                smoothedLandmarks = rawLandmarks; // أول إطار
+            } else {
+                for (let i = 0; i < rawLandmarks.length; i++) {
+                    // حساب موقع وسط بين القديم والجديد لتقليل القفزات
+                    smoothedLandmarks[i].x = lerp(smoothedLandmarks[i].x, rawLandmarks[i].x, SMOOTHING_FACTOR);
+                    smoothedLandmarks[i].y = lerp(smoothedLandmarks[i].y, rawLandmarks[i].y, SMOOTHING_FACTOR);
+                    smoothedLandmarks[i].z = lerp(smoothedLandmarks[i].z, rawLandmarks[i].z, SMOOTHING_FACTOR);
+                }
+            }
+
+            const landmarks = smoothedLandmarks; // نستخدم النقاط المنعمة للرسم
+
+            // --- تطبيق المكياج ---
+            ctx.save();
+
+            // 1. الشفاه (تنعيم الحواف + دمج)
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.fillStyle = STYLE.lips.color;
+            ctx.globalAlpha = STYLE.lips.opacity;
+            ctx.filter = 'blur(4px)'; 
+            drawSmoothPath(ctx, landmarks, INDICES.lipsUpper);
+            drawSmoothPath(ctx, landmarks, INDICES.lipsLower);
+            
+            // 2. الآيلاينر (Cat Eye / Winged)
+            ctx.globalCompositeOperation = 'source-over'; // فوق العين
+            ctx.fillStyle = STYLE.eyeliner.color;
+            ctx.globalAlpha = STYLE.eyeliner.opacity;
+            ctx.filter = 'blur(2px)'; // تمويه خفيف جداً لكي لا يبدو كرتوني
+            drawSmoothPath(ctx, landmarks, INDICES.leftEyeliner);
+            drawSmoothPath(ctx, landmarks, INDICES.rightEyeliner);
+
+            // 3. البلاشر/الكونتور
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.filter = 'blur(15px)'; // تمويه عالي جداً
+            drawBlush(ctx, landmarks, INDICES.leftCheek, STYLE.blush.color);
+            drawBlush(ctx, landmarks, INDICES.rightCheek, STYLE.blush.color);
+
+            ctx.restore();
+        }
+    }
+
+    // دالة رسم تستخدم المنحنيات بدلاً من الخطوط المستقيمة لزيادة الدقة
+    function drawSmoothPath(ctx, landmarks, indices) {
+        if (indices.length < 2) return;
+
+        ctx.beginPath();
+        const p0 = landmarks[indices[0]];
+        ctx.moveTo(p0.x * canvasElement.width, p0.y * canvasElement.height);
+
+        // استخدام منحنيات بسيطة بين النقاط
+        for (let i = 1; i < indices.length; i++) {
+            const p = landmarks[indices[i]];
+            const x = p.x * canvasElement.width;
+            const y = p.y * canvasElement.height;
+            // بما أن النقاط قريبة جداً من بعضها، الخط المستقيم (LineTo)
+            // مع التنعيم الزمني (Time Smoothing) يعطي أفضل أداء ومظهر
+            ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawBlush(ctx, landmarks, centerIdx, color) {
+        const p = landmarks[centerIdx];
+        const x = p.x * canvasElement.width;
+        const y = p.y * canvasElement.height;
+        const radius = canvasElement.width * 0.06; // حجم نسبي للوجه
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = STYLE.blush.opacity;
+        ctx.fill();
+    }
+
+    // إعداد Face Mesh
+    const faceMesh = new FaceMesh({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+    }});
+
+    faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true, // تفعيل النقاط الدقيقة للعيون والشفاه
+        minDetectionConfidence: 0.6, // رفع الحد الأدنى للثقة لتقليل الاهتزاز
+        minTrackingConfidence: 0.6
+    });
+    faceMesh.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await faceMesh.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+    });
+    camera.start();
+
+</script>
+</body>
+</html>
