@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تجربة مكياج واقع معزز</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        
+        /* الحاوية الرئيسية للكاميرا والرسم */
+        .container { position: relative; width: 100vw; height: 100vh; }
+        
+        /* الفيديو والكانفاس فوق بعضهما تماماً */
+        #video-element {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1); /* مرآة */
+        }
+        #output-canvas {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1); /* مرآة */
+        }
+
+        /* واجهة المستخدم */
+        #ui {
+            position: absolute; bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px; border-radius: 30px;
+            backdrop-filter: blur(10px);
+            z-index: 10;
+        }
+
+        .color-btn {
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 2px solid #fff; cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .color-btn:hover { transform: scale(1.2); }
+        
+        /* مؤشر التحميل */
+        #loading {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; font-size: 20px; z-index: 20;
+        }
+    </style>
+
+    <!-- مكتبات MediaPipe Face Mesh -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="loading">جارٍ تحميل نموذج الوجه الذكي...</div>
+
+    <div class="container">
+        <video id="video-element" playsinline></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+
+    <div id="ui">
+        <!-- أزرار الألوان -->
+        <div class="color-btn" style="background: #D81B60;" onclick="setColor('#D81B60')"></div>
+        <div class="color-btn" style="background: #8E24AA;" onclick="setColor('#8E24AA')"></div>
+        <div class="color-btn" style="background: #E53935;" onclick="setColor('#E53935')"></div>
+        <div class="color-btn" style="background: #5D4037;" onclick="setColor('#5D4037')"></div>
+        <div class="color-btn" style="background: transparent; border: 2px dashed #fff;" onclick="setColor(null)"></div>
+    </div>
+
+<script>
+    const videoElement = document.getElementById('video-element');
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const loadingMsg = document.getElementById('loading');
+
+    // الحالة الحالية للون
+    let currentColor = '#D81B60'; // اللون الافتراضي
+    let opacity = 0.6; // شفافية المكياج لدمجه مع الجلد
+
+    // --- تعريف نقاط الشفاه (Indices) في خريطة الوجه ---
+    // هذه الأرقام تمثل النقاط الدقيقة للشفاه في نموذج MediaPipe
+    const LIPS_UPPER = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 61];
+    const LIPS_LOWER = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 61];
+
+    function setColor(color) {
+        currentColor = color;
+    }
+
+    function onResults(results) {
+        // إخفاء رسالة التحميل عند بدء العمل
+        loadingMsg.style.display = 'none';
+
+        // ضبط حجم الكانفاس ليتطابق مع الفيديو
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const landmarks = results.multiFaceLandmarks[0];
+
+            if (currentColor) {
+                // تفعيل وضع الدمج لكي يبدو اللون كأنه فوق الجلد وليس طلاء مصمت
+                canvasCtx.globalCompositeOperation = 'multiply'; // أو 'soft-light'
+                canvasCtx.fillStyle = currentColor;
+                
+                // رسم الشفة العليا
+                drawPath(canvasCtx, landmarks, LIPS_UPPER);
+                // رسم الشفة السفلى
+                drawPath(canvasCtx, landmarks, LIPS_LOWER);
+
+                // إضافة طبقة لمعان خفيفة (اختياري)
+                canvasCtx.globalCompositeOperation = 'screen';
+                canvasCtx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                drawPath(canvasCtx, landmarks, LIPS_LOWER);
+            }
+        }
+        canvasCtx.restore();
+    }
+
+    // دالة مساعدة لرسم المسار بناءً على النقاط
+    function drawPath(ctx, landmarks, indices) {
+        ctx.beginPath();
+        // الانتقال لأول نقطة
+        const p0 = landmarks[indices[0]];
+        ctx.moveTo(p0.x * canvasElement.width, p0.y * canvasElement.height);
+
+        // التوصيل بباقي النقاط
+        for (let i = 1; i < indices.length; i++) {
+            const p = landmarks[indices[i]];
+            // استخدام منحنيات لتنعيم الحواف بدلاً من خطوط مستقيمة حادة
+            // هنا نستخدم خطوط بسيطة للسرعة، لكن النقاط كثيرة بما يكفي لتبدو ناعمة
+            ctx.lineTo(p.x * canvasElement.width, p.y * canvasElement.height);
+        }
+        ctx.closePath();
+        
+        // إعداد الشفافية والتعبئة
+        ctx.globalAlpha = opacity;
+        // إضافة تمويه للحواف (Blur) لتبدو واقعية
+        ctx.filter = 'blur(2px)'; 
+        ctx.fill();
+        ctx.filter = 'none'; // إعادة الفلتر
+    }
+
+    // إعداد Face Mesh
+    const faceMesh = new FaceMesh({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+    }});
+
+    faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true, // تفعيل النقاط الدقيقة (للعيون والشفاه)
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults(onResults);
+
+    // تشغيل الكاميرا
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await faceMesh.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+    });
+    camera.start();
+
+</script>
+</body>
+</html>

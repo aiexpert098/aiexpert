@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>محاكاة الجاذبية باليد - Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #050505; }
+        canvas { display: block; }
+        #video-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 160px;
+            height: 120px;
+            z-index: 10;
+            opacity: 0.7;
+            border: 2px solid #00ffcc;
+            border-radius: 10px;
+            overflow: hidden;
+            transform: scaleX(-1); /* مرآة */
+        }
+        #video-element { width: 100%; height: 100%; object-fit: cover; }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            pointer-events: none;
+            z-index: 20;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 12px;
+            border-left: 4px solid #00ffcc;
+            direction: rtl;
+        }
+        h3 { margin: 0 0 10px 0; color: #00ffcc; }
+        p { margin: 5px 0; font-size: 14px; }
+        .highlight { color: #ff0055; font-weight: bold; }
+    </style>
+    
+    <!-- مكتبات Three.js و MediaPipe -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div id="ui">
+        <h3>🌌 سديم الجاذبية</h3>
+        <p>🖐 <b>حرك يدك:</b> لتحريك السائل (تنافر).</p>
+        <p>🤏 <b>اجمع أصابعك (Pinch):</b> لتفعيل <span class="highlight">الثقب الأسود</span> (جذب).</p>
+        <p>الجسيمات تتوهج بناءً على سرعتها الفيزيائية.</p>
+    </div>
+
+    <div id="video-container">
+        <video id="video-element"></video>
+    </div>
+
+<script>
+    // --- إعدادات المشهد ---
+    const PARTICLE_COUNT = 12000;
+    const PARTICLE_SIZE = 0.2;
+    const BOUNDS = 40; // حدود العالم
+    
+    // --- THREE.JS SETUP ---
+    const scene = new THREE.Scene();
+    // ضباب خفيف لإعطاء عمق
+    scene.fog = new THREE.FogExp2(0x050505, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 40;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.body.appendChild(renderer.domElement);
+
+    // --- نظام الجسيمات الفيزيائي ---
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(PARTICLE_COUNT * 3);
+    const colors = new Float32Array(PARTICLE_COUNT * 3);
+    
+    // مصفوفات إضافية للفيزياء (السرعة والموقع الأصلي)
+    const velocities = new Float32Array(PARTICLE_COUNT * 3);
+    const originalPositions = new Float32Array(PARTICLE_COUNT * 3);
+
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+        const x = (Math.random() - 0.5) * BOUNDS * 2;
+        const y = (Math.random() - 0.5) * BOUNDS * 1.5;
+        const z = (Math.random() - 0.5) * 10; // طبقة رقيقة مبدئياً
+
+        positions[i * 3] = x;
+        positions[i * 3 + 1] = y;
+        positions[i * 3 + 2] = z;
+
+        originalPositions[i * 3] = x;
+        originalPositions[i * 3 + 1] = y;
+        originalPositions[i * 3 + 2] = z;
+
+        velocities[i * 3] = 0;     // vx
+        velocities[i * 3 + 1] = 0; // vy
+        velocities[i * 3 + 2] = 0; // vz
+
+        colors[i * 3] = 0;
+        colors[i * 3 + 1] = 0.5;
+        colors[i * 3 + 2] = 1;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    // خامة الجسيمات (متوهجة)
+    const material = new THREE.PointsMaterial({
+        size: PARTICLE_SIZE,
+        vertexColors: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.9
+    });
+
+    const particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    // --- حالة اليد ---
+    let handPos = { x: 0, y: 0, z: 0 };
+    let isHandPresent = false;
+    let isPinching = false;
+
+    // --- MediaPipe Hand Tracking ---
+    const videoElement = document.getElementById('video-element');
+    
+    function onResults(results) {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            isHandPresent = true;
+            const landmarks = results.multiHandLandmarks[0];
+            
+            // تتبع السبابة (Index Tip - 8)
+            const indexTip = landmarks[8];
+            const thumbTip = landmarks[4];
+
+            // تحويل الإحداثيات من 0..1 إلى إحداثيات المشهد ثلاثي الأبعاد
+            // نقوم بعكس X لأن الكاميرا تعمل كمرآة
+            const targetX = (1 - indexTip.x) * 60 - 30; 
+            const targetY = (1 - indexTip.y) * 40 - 20;
+            
+            // تنعيم الحركة (Lerp) لتقليل الاهتزاز
+            handPos.x += (targetX - handPos.x) * 0.15;
+            handPos.y += (targetY - handPos.y) * 0.15;
+            handPos.z = 0; // نفترض اليد في المنتصف
+
+            // حساب المسافة للقبض (Pinch)
+            const d = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+            isPinching = d < 0.05; // إذا كانت المسافة أقل من 5%
+
+        } else {
+            isHandPresent = false;
+            isPinching = false;
+        }
+    }
+
+    const hands = new Hands({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }});
+
+    hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    hands.onResults(onResults);
+
+    const cameraUtils = new Camera(videoElement, {
+        onFrame: async () => {
+            await hands.send({image: videoElement});
+        },
+        width: 640,
+        height: 480
+    });
+    cameraUtils.start();
+
+    // --- حلقة التحريك والفيزياء ---
+    const clock = new THREE.Clock();
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = clock.getDelta(); // الوقت المستغرق
+        const posAttr = geometry.attributes.position;
+        const colAttr = geometry.attributes.color;
+
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            const ix = i * 3;
+            const iy = i * 3 + 1;
+            const iz = i * 3 + 2;
+
+            let px = posAttr.array[ix];
+            let py = posAttr.array[iy];
+            let pz = posAttr.array[iz];
+
+            let vx = velocities[ix];
+            let vy = velocities[iy];
+            let vz = velocities[iz];
+
+            // 1. القوة الأساسية: العودة إلى المنزل (Elasticity)
+            // الجسيمات تحاول العودة لمكانها الأصلي ببطء
+            const ox = originalPositions[ix];
+            const oy = originalPositions[iy];
+            const oz = originalPositions[iz];
+
+            const homeForce = 0.015; // قوة "النابض" للعودة
+            vx += (ox - px) * homeForce;
+            vy += (oy - py) * homeForce;
+            vz += (oz - pz) * homeForce;
+
+            // 2. التفاعل مع اليد
+            if (isHandPresent) {
+                const dx = px - handPos.x;
+                const dy = py - handPos.y;
+                const dz = pz - handPos.z;
+                
+                const distSq = dx*dx + dy*dy + dz*dz;
+                const dist = Math.sqrt(distSq);
+
+                if (dist < 15) { // التأثير ضمن نطاق معين
+                    if (isPinching) {
+                        // --- وضع الثقب الأسود (جاذبية قوية) ---
+                        // نجذب الجسيمات بقوة نحو اليد
+                        const force = 80 / (distSq + 0.1); 
+                        vx -= (dx / dist) * force;
+                        vy -= (dy / dist) * force;
+                        vz -= (dz / dist) * force;
+
+                        // إضافة دوران (دوامة)
+                        vx += -dz * 0.5;
+                        vz += dx * 0.5;
+                    } else {
+                        // --- وضع التنافر (سائل) ---
+                        // ندفع الجسيمات بعيداً
+                        const force = 30 / (distSq + 1);
+                        vx += (dx / dist) * force;
+                        vy += (dy / dist) * force;
+                        vz += (dz / dist) * force;
+                    }
+                }
+            }
+
+            // 3. تطبيق الفيزياء
+            const friction = 0.94; // احتكاك الهواء لتهدئة الحركة
+            vx *= friction;
+            vy *= friction;
+            vz *= friction;
+
+            px += vx * dt * 10; // تحديث الموقع
+            py += vy * dt * 10;
+            pz += vz * dt * 10;
+
+            posAttr.array[ix] = px;
+            posAttr.array[iy] = py;
+            posAttr.array[iz] = pz;
+            
+            // حفظ السرعة الجديدة
+            velocities[ix] = vx;
+            velocities[iy] = vy;
+            velocities[iz] = vz;
+
+            // 4. تلوين ديناميكي بناءً على السرعة
+            const speed = Math.sqrt(vx*vx + vy*vy + vz*vz);
+            const t = Math.min(speed * 0.8, 1); // قيمة بين 0 و 1
+
+            // اللون البارد (أزرق/سماوي) للسرعة البطيئة
+            const r1 = 0, g1 = 0.5, b1 = 1.0;
+            // اللون الساخن (وردي/أبيض) للسرعة العالية
+            const r2 = 1.0, g2 = 0.0, b2 = 0.5;
+
+            // خلط الألوان
+            colAttr.array[ix] = r1 + (r2 - r1) * t;
+            colAttr.array[iy] = g1 + (g2 - g1) * t;
+            colAttr.array[iz] = b1 + (b2 - b1) * t;
+        }
+
+        posAttr.needsUpdate = true;
+        colAttr.needsUpdate = true;
+
+        // دوران بطيء للمشهد بالكامل
+        scene.rotation.y += 0.001;
+
+        renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // استجابة لتغيير حجم النافذة
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+</script>
+</body>
+</html>
