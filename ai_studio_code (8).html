@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مكياج سريع وثابت (Dynamic Smoothing)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; }
+        .container { position: relative; width: 100vw; height: 100vh; }
+        
+        #video-element {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+        #output-canvas {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            object-fit: cover; transform: scaleX(-1);
+        }
+        
+        #status {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            color: #fff; background: rgba(0,0,0,0.5); padding: 5px 15px;
+            border-radius: 15px; font-size: 12px; pointer-events: none;
+        }
+    </style>
+
+    <!-- MediaPipe Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <div class="container">
+        <video id="video-element" playsinline></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+    <div id="status">Adaptive Smoothing Active</div>
+
+<script>
+    const videoElement = document.getElementById('video-element');
+    const canvasElement = document.getElementById('output-canvas');
+    const ctx = canvasElement.getContext('2d');
+
+    // --- إعدادات التنعيم الديناميكي ---
+    const MIN_SPEED = 0.2; // تنعيم قوي عند الثبات (يمنع الاهتزاز)
+    const MAX_SPEED = 0.8; // استجابة سريعة جداً عند الحركة
+    const VELOCITY_THRESHOLD = 0.002; // حساسية الحركة
+
+    let smoothedLandmarks = null;
+
+    // --- ستايل المكياج (نفس الستايل السابق) ---
+    const STYLE = {
+        lips: { color: '#8a3a3a', opacity: 0.6 }, 
+        eyeliner: { color: '#000000', opacity: 0.8 },
+        eyeshadow: { color: '#4a3b32', opacity: 0.4 }, 
+        blush: { color: '#d16d6d', opacity: 0.25 }
+    };
+
+    // --- خرائط النقاط ---
+    const INDICES = {
+        lipsUpper: [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191, 78, 61],
+        lipsLower: [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95, 78, 61],
+        leftEyeliner: [33, 7, 163, 144, 145, 153, 154, 155, 133, 243, 190, 56, 28, 27, 29, 30, 247, 33],
+        rightEyeliner: [362, 382, 381, 380, 374, 373, 390, 249, 263, 463, 414, 286, 258, 257, 259, 260, 467, 362],
+        leftCheek: 116, rightCheek: 345
+    };
+
+    // دالة Lerp الأساسية
+    function lerp(start, end, amt) {
+        return (1 - amt) * start + amt * end;
+    }
+
+    function onResults(results) {
+        // تحديث حجم الكانفاس
+        canvasElement.width = videoElement.videoWidth;
+        canvasElement.height = videoElement.videoHeight;
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+        if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+            const rawLandmarks = results.multiFaceLandmarks[0];
+
+            // --- خوارزمية التنعيم الديناميكي ---
+            if (!smoothedLandmarks) {
+                smoothedLandmarks = JSON.parse(JSON.stringify(rawLandmarks));
+            } else {
+                for (let i = 0; i < rawLandmarks.length; i++) {
+                    const prev = smoothedLandmarks[i];
+                    const curr = rawLandmarks[i];
+
+                    // حساب مسافة الحركة (السرعة)
+                    const dx = curr.x - prev.x;
+                    const dy = curr.y - prev.y;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+
+                    // إذا كانت المسافة كبيرة (حركة سريعة) استخدم معامل عالي (MAX_SPEED)
+                    // إذا كانت المسافة صغيرة (ثبات) استخدم معامل منخفض (MIN_SPEED)
+                    let alpha = (distance > VELOCITY_THRESHOLD) ? MAX_SPEED : MIN_SPEED;
+
+                    // تطبيق التنعيم
+                    prev.x = lerp(prev.x, curr.x, alpha);
+                    prev.y = lerp(prev.y, curr.y, alpha);
+                    prev.z = lerp(prev.z, curr.z, alpha);
+                }
+            }
+
+            const landmarks = smoothedLandmarks;
+
+            // --- الرسم ---
+            ctx.save();
+
+            // 1. Lips
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.fillStyle = STYLE.lips.color;
+            ctx.globalAlpha = STYLE.lips.opacity;
+            ctx.filter = 'blur(4px)'; 
+            drawPath(ctx, landmarks, INDICES.lipsUpper);
+            drawPath(ctx, landmarks, INDICES.lipsLower);
+            
+            // 2. Eyeliner
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = STYLE.eyeliner.color;
+            ctx.globalAlpha = STYLE.eyeliner.opacity;
+            ctx.filter = 'blur(2px)'; 
+            drawPath(ctx, landmarks, INDICES.leftEyeliner);
+            drawPath(ctx, landmarks, INDICES.rightEyeliner);
+
+            // 3. Blush
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.filter = 'blur(15px)';
+            drawBlush(ctx, landmarks, INDICES.leftCheek, STYLE.blush.color);
+            drawBlush(ctx, landmarks, INDICES.rightCheek, STYLE.blush.color);
+
+            ctx.restore();
+        }
+    }
+
+    function drawPath(ctx, landmarks, indices) {
+        if (indices.length < 2) return;
+        ctx.beginPath();
+        const p0 = landmarks[indices[0]];
+        ctx.moveTo(p0.x * canvasElement.width, p0.y * canvasElement.height);
+        for (let i = 1; i < indices.length; i++) {
+            const p = landmarks[indices[i]];
+            ctx.lineTo(p.x * canvasElement.width, p.y * canvasElement.height);
+        }
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    function drawBlush(ctx, landmarks, centerIdx, color) {
+        const p = landmarks[centerIdx];
+        const x = p.x * canvasElement.width;
+        const y = p.y * canvasElement.height;
+        const radius = canvasElement.width * 0.07; 
+
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = color;
+        ctx.globalAlpha = STYLE.blush.opacity;
+        ctx.fill();
+    }
+
+    const faceMesh = new FaceMesh({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+    }});
+
+    faceMesh.setOptions({
+        maxNumFaces: 1,
+        refineLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await faceMesh.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720
+    });
+    camera.start();
+
+</script>
+</body>
+</html>
